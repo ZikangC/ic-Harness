@@ -1,0 +1,17 @@
+[reference]
+# 此配置由服务器容器在 /work/k3harness 下读取。下列 reference 文件由
+# scripts/remote_round.sh 从本机 k3demo 精确同步，保持 scorer 的原始相对目录布局。
+root = "."
+script = "reference.py"
+image_builder = "standalone_rtl/tools/build_golden_image.py"
+scorer = "standalone_rtl/tools/score_against_golden.py"
+
+[acceptance]
+cosine_min = 0.98
+argmax_agree_min = 0.99
+
+[verification]
+# Golden 顶层契约来自 standalone_rtl：标准 FNV descriptor ABI、完整 decoder
+# 和 result 写回。每轮仅更换 build/image/dump 路径，不改变编译命令。
+command = "mkdir -p {build_dir}/obj_dir && verilator --binary --timing -Wall -Wno-fatal -j 1 -f rtl/filelist.f tb/tb_nano_golden_decoder_top.sv --top-module tb_nano_golden_decoder_top -Mdir {build_dir}/obj_dir && {build_dir}/obj_dir/Vtb_nano_golden_decoder_top +IMAGE={image} +DUMP={dump}"
+timeout_seconds = 1800
