@@ -24,7 +24,13 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE_HOST" \
   "status='$REMOTE_PROJECT/status/current.status'; \
    if [ ! -f \"\$status\" ]; then echo 'no run has started yet'; exit 1; fi; \
    cat \"\$status\"; \
+   state=\$(sed -n 's/^state=//p' \"\$status\"); \
    run=\$(sed -n 's/^run_id=//p' \"\$status\"); \
+   if [ \"\$state\" != running ]; then \
+     echo \"--- no live simulation to follow (state=\$state, run_id=\$run) ---\"; \
+     echo 'The server is idle or has finished this run. To monitor local AI reasoning, follow runs/agent-*/agent.log instead.'; \
+     exit 0; \
+   fi; \
    log='$REMOTE_PROJECT/runs/'\"\$run\"'/simulation.log'; \
    printf '%s\\n' '--- following remote simulation.log; Ctrl-C stops viewing only ---'; \
    if [ -f \"\$log\" ]; then tail -n 80 -f \"\$log\"; else echo \"log is not available yet: \$log\"; fi"

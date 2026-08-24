@@ -1,10 +1,11 @@
 [reference]
 # 此配置由服务器容器在 /work/k3harness 下读取。下列 reference 文件由
-# scripts/remote_round.sh 从本机 k3demo 精确同步，保持 scorer 的原始相对目录布局。
+# scripts/remote_round.sh 从本机 k3demo 精确同步；运行工具统一位于
+# tools/standalone_rtl，避免依赖服务器遗留的 standalone_rtl 副本。
 root = "."
 script = "reference.py"
-image_builder = "standalone_rtl/tools/build_golden_image.py"
-scorer = "standalone_rtl/tools/score_against_golden.py"
+image_builder = "tools/standalone_rtl/build_golden_image.py"
+scorer = "tools/standalone_rtl/score_against_golden.py"
 
 [acceptance]
 cosine_min = 0.98
@@ -14,4 +15,7 @@ argmax_agree_min = 0.99
 # Golden 顶层契约来自 standalone_rtl：标准 FNV descriptor ABI、完整 decoder
 # 和 result 写回。每轮仅更换 build/image/dump 路径，不改变编译命令。
 command = "mkdir -p {build_dir}/obj_dir && verilator --binary --timing -Wall -Wno-fatal -j 1 -f rtl/filelist.f tb/tb_nano_golden_decoder_top.sv --top-module tb_nano_golden_decoder_top -Mdir {build_dir}/obj_dir && {build_dir}/obj_dir/Vtb_nano_golden_decoder_top +IMAGE={image} +DUMP={dump}"
-timeout_seconds = 1800
+# 覆盖 Verilator 编译与完整仿真的总墙钟时间。prompt 0 有 48 token；2026-08-21
+# 实测 1800 秒只执行到 pos26。5000 秒（约 83 分钟）是完整 prompt 0 回归的
+# 异常保护线：留出正常服务器负载波动；超过此时间才视作疑似停滞。
+timeout_seconds = 5000

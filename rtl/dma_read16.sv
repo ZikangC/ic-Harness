@@ -31,8 +31,12 @@ module dma_read16 (
     mem_req_valid = (state == REQUEST);
     mem_req_addr = base_addr + offset;
     mem_rsp_ready = (state == RESPONSE);
-    data_valid = (state == DELIVER);
-    data = holding;
+    // Deliver the beat on the RESPONSE cycle and issue the next request the
+    // following cycle (2 cycles/beat instead of 3).  If the consumer is not
+    // ready at the response, fall back to the DELIVER hold state so no beat
+    // is ever dropped.
+    data_valid = ((state == RESPONSE) && mem_rsp_valid) || (state == DELIVER);
+    data = (state == RESPONSE) ? mem_rsp_rdata : holding;
     data_last = (offset + 16 >= byte_count);
   end
 
@@ -42,7 +46,15 @@ module dma_read16 (
       case (state)
         IDLE: if (start) begin offset <= '0; state <= REQUEST; end
         REQUEST: if (mem_req_ready) state <= RESPONSE;
-        RESPONSE: if (mem_rsp_valid) begin holding <= mem_rsp_rdata; state <= DELIVER; end
+        RESPONSE: if (mem_rsp_valid) begin
+          holding <= mem_rsp_rdata;
+          if (data_ready) begin
+            if (offset + 16 >= byte_count) state <= IDLE;
+            else begin offset <= offset + 16; state <= REQUEST; end
+          end else begin
+            state <= DELIVER;
+          end
+        end
         DELIVER: if (data_ready) begin
           if (offset + 16 >= byte_count) state <= IDLE;
           else begin offset <= offset + 16; state <= REQUEST; end

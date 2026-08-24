@@ -50,9 +50,13 @@ def as_bytes(array: np.ndarray, tag: str) -> bytes:
     return np.asarray(array, dtype="<i2").tobytes()
 
 
-def build(cfg: ModelConfig, seed: int, prompt: int):
+def build(cfg: ModelConfig, seed: int, prompt: int, seq_len: int | None = None):
     weights = gen_weights(cfg, seed)
     tokens = gen_tokens(cfg, seed, prompt)
+    if seq_len is not None:
+        if not 1 <= seq_len <= len(tokens):
+            raise ValueError(f"--seq-len must be in [1, {len(tokens)}] for prompt {prompt}")
+        tokens = tokens[:seq_len]
     entries = []
     shapes = matmul_shapes(cfg)
     for name, _, tag in tensor_list(cfg):
@@ -104,9 +108,10 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=20260706)
     ap.add_argument("--prompt", type=int, default=1, choices=(0, 1))
     ap.add_argument("--group-size", type=int, choices=(64, 128), default=128)
+    ap.add_argument("--seq-len", type=int, help="run only the first N causal tokens of the selected prompt")
     args = ap.parse_args()
     cfg = replace(ModelConfig(), group_size=args.group_size)
-    image, meta = build(cfg, args.seed, args.prompt)
+    image, meta = build(cfg, args.seed, args.prompt, args.seq_len)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("".join(f"{byte:02x}\n" for byte in image))
     if args.binary:

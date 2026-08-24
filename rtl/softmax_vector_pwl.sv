@@ -34,13 +34,26 @@ module softmax_vector_pwl #(
   function automatic logic [FRAC_W:0] exp_negative(input logic signed [63:0] x);
     logic signed [63:0] y;
     begin
-      // Q1.14 samples: exp(-8), exp(-6), exp(-4), exp(-2), exp(0).
-      if (x <= -8*ONE)       y = 5;
-      else if (x <= -6*ONE)  y = lerp(x, -8*ONE, -6*ONE, 5, 41);
-      else if (x <= -4*ONE)  y = lerp(x, -6*ONE, -4*ONE, 41, 300);
-      else if (x <= -2*ONE)  y = lerp(x, -4*ONE, -2*ONE, 300, 2217);
-      else if (x <= 0)       y = lerp(x, -2*ONE, 0, 2217, 16384);
-      else                   y = 16384;
+      // exp(-x) PWL, exact at each sample in Q1.14.  The previous five
+      // breakpoints ([-8,-6,-4,-2,0]) left up to ~50% error near zero where
+      // the MLA attention deltas concentrate; the exp curve is now sampled
+      // every 0.25 over the critical [-2,0] span and more densely below.
+      if (x <= -8*ONE)        y = 5;
+      else if (x <= -6*ONE)   y = lerp(x, -8*ONE, -6*ONE, 5, 41);
+      else if (x <= -5*ONE)   y = lerp(x, -6*ONE, -5*ONE, 41, 110);
+      else if (x <= -4*ONE)   y = lerp(x, -5*ONE, -4*ONE, 110, 300);
+      else if (x <= -3*ONE)   y = lerp(x, -4*ONE, -3*ONE, 300, 816);
+      else if (x <= -5*ONE/2) y = lerp(x, -3*ONE, -5*ONE/2, 816, 1345);
+      else if (x <= -2*ONE)   y = lerp(x, -5*ONE/2, -2*ONE, 1345, 2217);
+      else if (x <= -7*ONE/4) y = lerp(x, -2*ONE, -7*ONE/4, 2217, 2847);
+      else if (x <= -3*ONE/2) y = lerp(x, -7*ONE/4, -3*ONE/2, 2847, 3656);
+      else if (x <= -5*ONE/4) y = lerp(x, -3*ONE/2, -5*ONE/4, 3656, 4694);
+      else if (x <= -1*ONE)   y = lerp(x, -5*ONE/4, -1*ONE, 4694, 6027);
+      else if (x <= -3*ONE/4) y = lerp(x, -1*ONE, -3*ONE/4, 6027, 7739);
+      else if (x <= -1*ONE/2) y = lerp(x, -3*ONE/4, -1*ONE/2, 7739, 9937);
+      else if (x <= -1*ONE/4) y = lerp(x, -1*ONE/2, -1*ONE/4, 9937, 12760);
+      else if (x <= 0)        y = lerp(x, -1*ONE/4, 0, 12760, 16384);
+      else                    y = 16384;
       exp_negative = y[FRAC_W:0];
     end
   endfunction

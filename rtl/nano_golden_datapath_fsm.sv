@@ -104,7 +104,7 @@ module nano_golden_datapath_fsm #(
   logic signed [64*DATA_W-1:0] l1_zero_expert, l1_router_mix_unused, l1_moe_out, l1_out, l1_out_next;
   logic signed [64*DATA_W-1:0] out_res_mix, final_hidden;
   logic signed [64*16-1:0] out_res_norm, out_res_proj, final_norm_offset;
-  logic signed [512*DATA_W-1:0] head_g64, head_g128, head_calc, logits_reg;
+  logic signed [512*DATA_W-1:0] head_g128, head_calc, logits_reg;
   logic [8:0] head_argmax_calc, argmax_reg;
   logic head_active;
   logic [1024*128-1:0] head_q_input;
@@ -136,6 +136,9 @@ module nano_golden_datapath_fsm #(
   logic dynamic_qsz_load;
   logic signed [512*DATA_W-1:0] matvec_y;
   logic signed [64*DATA_W-1:0] matvec_x;
+  logic signed [64*DATA_W-1:0] matvec_y_64;
+  logic signed [32*DATA_W-1:0] matvec_y_32;
+  logic signed [8*DATA_W-1:0] matvec_y_8;
   logic [3:0] matvec_kind;
 
   nano_golden_datapath_adapter loads (
@@ -152,7 +155,28 @@ module nano_golden_datapath_fsm #(
   // into a second, incorrect recurrence update.
   assign matvec_x = (state == KO_REQ || state == KO_WAIT || state == KO_CAPTURE) ? kda_core_reg :
                     (state == L0_ROUTER_REQ || state == L0_ROUTER_WAIT || state == L0_ROUTER_CAPTURE) ? l0_moe_norm : h_norm_reg;
-  q4_matvec_dispatch #(.DATA_W(DATA_W), .MAX_S_BEATS(128), .MAX_Z_BEATS(128)) mm (.kind(matvec_kind), .x_bus(matvec_x), .q_bus, .s_bus, .z_bus, .y_bus(matvec_y));
+  // The golden FSM uses only three of the generic dispatch shapes (64x64 for
+  // KDA q/k/v/o, 64x32 for f1/g1, 64x8 for the L0 router).  The generic
+  // q4_matvec_dispatch evaluates all seven shapes -- including a 64x512 head
+  // -- every cycle, which dominates simulation time.  Dedicated instances
+  // keep the per-cycle combinational cost at the shapes that are actually
+  // selected; matvec_y's low lanes are numerically identical to the dispatch
+  // output for the three used kinds.
+  q4_dequant_matvec #(.IN(64), .OUT(64), .GROUP(64), .DATA_W(DATA_W)) mm_64x64
+    (.x_bus(matvec_x), .q_bus(q_bus[64/2*64*8-1:0]), .scale_bus(s_bus[64*16-1:0]), .zero_bus(z_bus[64*8-1:0]), .y_bus(matvec_y_64));
+  q4_dequant_matvec #(.IN(64), .OUT(32), .GROUP(64), .DATA_W(DATA_W)) mm_64x32
+    (.x_bus(matvec_x), .q_bus(q_bus[64/2*32*8-1:0]), .scale_bus(s_bus[32*16-1:0]), .zero_bus(z_bus[32*8-1:0]), .y_bus(matvec_y_32));
+  q4_dequant_matvec #(.IN(64), .OUT(8), .GROUP(64), .DATA_W(DATA_W)) mm_64x8
+    (.x_bus(matvec_x), .q_bus(q_bus[64/2*8*8-1:0]), .scale_bus(s_bus[8*16-1:0]), .zero_bus(z_bus[8*8-1:0]), .y_bus(matvec_y_8));
+  always_comb begin
+    matvec_y = '0;
+    case (matvec_kind)
+      4'd0:   matvec_y[64*DATA_W-1:0] = matvec_y_64;
+      4'd1:   matvec_y[32*DATA_W-1:0] = matvec_y_32;
+      4'd4:   matvec_y[8*DATA_W-1:0] = matvec_y_8;
+      default: ;
+    endcase
+  end
   q4_dequant_matvec #(.IN(64), .OUT(2), .GROUP(64), .DATA_W(DATA_W)) kda_b_mm
     (.x_bus(h_norm_reg), .q_bus(q_bus[64/2*2*8-1:0]), .scale_bus(s_bus[2*16-1:0]), .zero_bus(z_bus[2*8-1:0]), .y_bus(beta_pre));
   q4_dequant_matvec #(.IN(32), .OUT(64), .GROUP(32), .DATA_W(DATA_W)) kda_f2_mm
@@ -221,8 +245,9 @@ module nano_golden_datapath_fsm #(
     .block_score(), .prefix_score(), .out_bus(out_res_mix));
   rmsnorm_q #(.DIM(64), .DATA_W(DATA_W)) final_norm_unit
     (.x_bus(out_res_mix), .norm_offset_bus(final_norm_offset), .y_bus(final_hidden));
-  q4_dequant_matvec #(.IN(64), .OUT(512), .GROUP(64), .DATA_W(DATA_W)) head_mm_g64
-    (.x_bus(final_hidden), .q_bus(head_q_input), .scale_bus(head_s_input[2*512*16-1:0]), .zero_bus(head_z_input[2*512*8-1:0]), .y_bus(head_g64));
+  // IN=64 fits in a single group for both group-size 64 and 128 (the head's
+  // fan-in is 64), so the GROUP=64 head matvec is numerically identical to
+  // the GROUP=128 one.  Keeping only the latter halves the head matvec cost.
   q4_dequant_matvec #(.IN(64), .OUT(512), .GROUP(128), .DATA_W(DATA_W)) head_mm_g128
     (.x_bus(final_hidden), .q_bus(head_q_input), .scale_bus(head_s_input[512*16-1:0]), .zero_bus(head_z_input[512*8-1:0]), .y_bus(head_g128));
   assign head_q_input = head_active ? q_bus : '0;
@@ -344,7 +369,7 @@ module nano_golden_datapath_fsm #(
       matvec_kind = 4'd4;  // MoE router is 64x8.
     kda_step_valid = (state == KDA_STEP);
     l1_attn_start = (state == L1_ATTN_START);
-    head_calc = group_is_128 ? head_g128 : head_g64;
+    head_calc = head_g128;
     head_active = (state == HEAD_REQ) || (state == HEAD_WAIT) || (state == HEAD_CAPTURE);
     head_argmax_calc = '0;
     for (integer head_lane = 1; head_lane < 512; head_lane = head_lane + 1)
@@ -458,7 +483,8 @@ module nano_golden_datapath_fsm #(
         kda_kact_dbg <= kda_recurrence.k_act; kda_vact_dbg <= kda_recurrence.v_act;
         kda_qnorm_dbg <= kda_recurrence.q_norm; kda_knorm_dbg <= kda_recurrence.k_norm;
         kda_alpha_dbg <= kda_recurrence.alpha_bus; kda_beta_dbg <= kda_recurrence.beta_bus;
-        kda_head_raw_dbg <= kda_recurrence.head_raw; kda_head_norm_dbg <= kda_recurrence.head_norm;
+        kda_head_raw_dbg <= kda_recurrence.head_raw >>> 4;
+        kda_head_norm_dbg <= kda_recurrence.head_norm >>> 4;
         state <= KO_REQ;
       end
       KO_REQ: if (load_accept) state <= KO_WAIT;

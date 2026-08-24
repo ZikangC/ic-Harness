@@ -20,6 +20,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=20260706)
     ap.add_argument("--prompt", type=int, default=1, choices=(0, 1))
     ap.add_argument("--group-size", type=int, default=128, choices=(64, 128))
+    ap.add_argument("--seq-len", type=int, help="audit only the first N positions of the selected prompt")
     args = ap.parse_args()
     got = {int(m.group(1)): ((int(m.group(2)), int(m.group(3))), (int(m.group(4)), int(m.group(5))))
            for m in map(LINE.search, args.rtl_log.read_text(errors="replace").splitlines()) if m}
@@ -39,6 +40,10 @@ def main() -> None:
         return original_moe(layer, h)
     model._moe = traced_moe  # type: ignore[method-assign]
     model.forward_sequence(gen_tokens(cfg, args.seed, args.prompt))
+    if args.seq_len is not None:
+        if not 1 <= args.seq_len <= len(expected):
+            raise ValueError(f"--seq-len must be in [1, {len(expected)}]")
+        expected = expected[:args.seq_len]
     missing = []
     mismatch = []
     for pos, want in enumerate(expected):

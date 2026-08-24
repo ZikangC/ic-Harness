@@ -76,6 +76,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=20260706)
     parser.add_argument("--prompt", type=int, choices=(0, 1), default=1)
     parser.add_argument("--group-size", type=int, choices=(64, 128), default=128)
+    parser.add_argument("--seq-len", type=int, help="run only the first N causal tokens of the selected prompt")
     parser.add_argument("--run-id", help="unique directory name below runs/")
     parser.add_argument("--prepare-only", action="store_true", help="generate golden/image but skip simulation")
     args = parser.parse_args()
@@ -86,10 +87,13 @@ def main() -> int:
 
     ref_rc = run_command([sys.executable, ref["script"], *common, "--output", str(paths.golden),
                           "--dump-intermediates"], cwd=PROJECT, log_path=paths.root / "reference.log", timeout=300)
-    image_rc = run_command([sys.executable, ref["image_builder"], "--output", str(paths.image),
-                            "--binary", str(paths.image_bin), "--meta", str(paths.meta), *common],
-                           cwd=PROJECT, log_path=paths.root / "image.log", timeout=300)
+    image_command = [sys.executable, ref["image_builder"], "--output", str(paths.image),
+                     "--binary", str(paths.image_bin), "--meta", str(paths.meta), *common]
+    if args.seq_len is not None:
+        image_command.extend(["--seq-len", str(args.seq_len)])
+    image_rc = run_command(image_command, cwd=PROJECT, log_path=paths.root / "image.log", timeout=300)
     summary: dict = {"task": args.task, "run_dir": str(paths.root), "seed": args.seed, "prompt": args.prompt,
+                     "requested_seq_len": args.seq_len,
                      "group_size": args.group_size, "thresholds": acceptance,
                      "reference_exit": ref_rc, "image_exit": image_rc, "pass": False}
     if ref_rc or image_rc:
@@ -121,4 +125,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -66,13 +66,19 @@ module mla_attention_head #(
         end
         SCORE: begin
           dot = 0;
+          // Accumulate the full-precision Q2*FRAC products and rescale once.
+          // The previous per-term `(q*k) >>> FRAC_W` truncation biased every
+          // attention logit downward by up to 0.5 LSB; over 48 key dims this
+          // systematic bias shifts the softmax probabilities and, through the
+          // MLA context, the L1 router near-ties.  The single 29-bit shift
+          // below produces the same Q*.14 score scale as before.
           for (d = 0; d < KD; d = d + 1) begin
             q_value = $signed(query_bus[d*DATA_W +: DATA_W]);
             k_value = $signed(cache_key_bus[d*DATA_W +: DATA_W]);
-            dot = dot + ((q_value * k_value) >>> FRAC_W);
+            dot = dot + q_value * k_value;
           end
-          // 1/sqrt(48) ~= 4729 / 2^15.
-          score_mem[index] <= (dot * 4729) >>> 15;
+          // 1/sqrt(48) ~= 4729 / 2^15; rescale the Q2*FRAC dot to Q*.14.
+          score_mem[index] <= (dot * 4729) >>> (FRAC_W + 15);
           if (index + 1 >= valid_count) state <= NORM_WAIT;
           else index <= index + 1'b1;
         end

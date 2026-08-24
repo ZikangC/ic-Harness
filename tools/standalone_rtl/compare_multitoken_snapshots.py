@@ -20,7 +20,7 @@ def parse(path: Path) -> dict[tuple[int, str], np.ndarray]:
             out[(int(m.group(2)), m.group(3))] = np.asarray(m.group(4).split(), np.float64) / (1 << 14)
     return out
 
-def expected(seed: int, prompt: int, group: int) -> dict[tuple[int, str], np.ndarray]:
+def expected(seed: int, prompt: int, group: int, seq_len: int | None = None) -> dict[tuple[int, str], np.ndarray]:
     cfg = replace(ModelConfig(), group_size=group)
     model = NanoReference(cfg, gen_weights(cfg, seed))
     out: dict[tuple[int, str], np.ndarray] = {}
@@ -42,8 +42,12 @@ def expected(seed: int, prompt: int, group: int) -> dict[tuple[int, str], np.nda
     model._moe = trace_moe  # type: ignore[method-assign]
     model._mla = trace_mla  # type: ignore[method-assign]
     model.dump = {}
-    model.forward_sequence(gen_tokens(cfg, seed, prompt))
-    for p in range(len(gen_tokens(cfg, seed, prompt))):
+    tokens = gen_tokens(cfg, seed, prompt)
+    if seq_len is not None:
+        if not 1 <= seq_len <= len(tokens): raise ValueError(f"--seq-len must be in [1, {len(tokens)}]")
+        tokens = tokens[:seq_len]
+    model.forward_sequence(tokens)
+    for p in range(len(tokens)):
         out[(p, "kda_core")] = model.dump[f"p{p}.L0.kda.core"].reshape(-1)
         out[(p, "mla_context")] = model.dump[f"p{p}.L1.mla.ctx"].reshape(-1)
     return out
@@ -51,8 +55,9 @@ def expected(seed: int, prompt: int, group: int) -> dict[tuple[int, str], np.nda
 def main() -> None:
     ap = argparse.ArgumentParser(); ap.add_argument("--rtl-log", type=Path, required=True)
     ap.add_argument("--seed", type=int, default=20260706); ap.add_argument("--prompt", type=int, default=1, choices=(0,1))
-    ap.add_argument("--group-size", type=int, default=128, choices=(64,128)); args = ap.parse_args()
-    rtl, ref = parse(args.rtl_log), expected(args.seed, args.prompt, args.group_size)
+    ap.add_argument("--group-size", type=int, default=128, choices=(64,128)); ap.add_argument("--seq-len", type=int)
+    args = ap.parse_args()
+    rtl, ref = parse(args.rtl_log), expected(args.seed, args.prompt, args.group_size, args.seq_len)
     print("pos boundary                 cosine    max_abs")
     for key in sorted(set(rtl) & set(ref)):
         a, b = rtl[key], ref[key]

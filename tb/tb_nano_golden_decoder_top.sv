@@ -5,25 +5,27 @@ module tb_nano_golden_decoder_top;
   localparam int MEM_BYTES=262144, MAX_CYCLES=1500000;
   logic clk=0,rst_n=0,run=0,busy,done,error,mem_req_valid,mem_req_ready,mem_req_write,mem_rsp_valid,mem_rsp_ready;
   logic [35:0] mem_req_addr; logic [127:0] mem_req_wdata,mem_rsp_rdata; logic [15:0] mem_req_wstrb;
-  logic [7:0] memory[0:MEM_BYTES-1]; logic rsp_pending,saw_status; integer i,cycles,fd; string image_path,dump_path;
+  logic [7:0] memory[0:MEM_BYTES-1]; logic saw_status; integer i,cycles,fd; string image_path,dump_path;
   logic [35:0] status_addr;
   nano_golden_decoder_top dut (.clk,.rst_n,.run,.busy,.done,.error,.mem_req_valid,.mem_req_ready,.mem_req_write,.mem_req_addr,.mem_req_wdata,.mem_req_wstrb,.mem_rsp_valid,.mem_rsp_ready,.mem_rsp_rdata);
   always #5 clk=~clk;
-  assign mem_req_ready=!rsp_pending;
+  // The memory port is a valid/ready handshake; latency is elastic.  The
+  // arbiter inside the DUT already limits the fabric to one outstanding read,
+  // so the slave can respond one cycle after acceptance without losing a
+  // beat, dropping a write, or changing any data.
+  assign mem_req_ready=1'b1;
   always_ff @(posedge clk) begin
-    if(!rst_n) begin mem_rsp_valid<=0; mem_rsp_rdata<='0; rsp_pending<=0; saw_status<=0; end else begin
+    if(!rst_n) begin mem_rsp_valid<=0; mem_rsp_rdata<='0; saw_status<=0; end else begin
       mem_rsp_valid<=0;
-      if(rsp_pending&&mem_rsp_ready) rsp_pending<=0;
       if(mem_req_valid&&mem_req_ready) begin
         if(mem_req_write) begin
           for(i=0;i<16;i=i+1) if(mem_req_wstrb[i]) memory[mem_req_addr+i]<=mem_req_wdata[i*8 +: 8];
           if(mem_req_addr==status_addr&&mem_req_wdata[31:0]==32'h600d_d00d) saw_status<=1;
         end else begin
           for(i=0;i<16;i=i+1) mem_rsp_rdata[i*8 +: 8]<=memory[mem_req_addr+i];
-          rsp_pending<=1;
+          mem_rsp_valid<=1;
         end
       end
-      if(rsp_pending) mem_rsp_valid<=1;
     end
   end
   task automatic dump_memory;
@@ -94,6 +96,12 @@ module tb_nano_golden_decoder_top;
         dump_token_q14(dut.dp.token_position, "kda_attention", dut.dp.kda_attention);
         dump_token_q14(dut.dp.token_position, "l0_moe_norm", dut.dp.l0_moe_norm);
         dump_token_q14_8(dut.dp.token_position, "l0_router_pre", dut.dp.l0_router_pre);
+        // L1 MoE router input and pre-projection, sampled at the same commit
+        // edge as the L0 snapshots.  These isolate whether an L1 top-2
+        // divergence originates in the L1 block output (l1_moe_norm) or in
+        // the router projection/score comparison (l1_router_pre).
+        dump_token_q14(dut.dp.token_position, "l1_moe_norm", dut.dp.l1_moe_norm);
+        dump_token_q14_8(dut.dp.token_position, "l1_router_pre", dut.dp.l1_router_pre_reg);
         // These are the exact current-token inputs of MLA's cache WRITE:
         // key=[kc, shared_kr] per head and the two-head value vector.
         dump_token_q14(dut.dp.token_position, "mla_write_kc", dut.dp.l1_kc);
