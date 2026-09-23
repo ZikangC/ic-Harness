@@ -58,6 +58,15 @@ def decision_packet_fixture() -> dict[str, object]:
                 "purpose": "continue one bounded batch", "executor_ref": "flash.run",
                 "execution_mode": "standard_batch",
                 "parameter_schema": {"flash_attempts": {"minimum": 1, "maximum": 6}},
+                "campaign_policy": {"selection": "pro", "profiles": {
+                    "rtl_local_targeted": {
+                        "repair_domain": "rtl_optimization", "mutation_policy": "local",
+                        "allowed_path_roots": ["rtl"],
+                        "verification_level": "sta_targeted",
+                        "measurement_partitions": [],
+                        "measurement_budget_ceiling_values": [180, 600, 1800],
+                    },
+                }},
                 "source": "test",
             },
             "inspect_existing_sta_evidence": {
@@ -70,29 +79,31 @@ def decision_packet_fixture() -> dict[str, object]:
 def main() -> None:
     decision = parse_decision(
         'analysis\n```json\n'
-        '{"action":"continue","flash_attempts":2,"flash_directive":"measure closure",'
+        '{"action":"continue","flash_attempts":2,"campaign_profile":"rtl_local_targeted",'
+        '"campaign_objective":"measure closure","campaign_scope_paths":["rtl"],'
+        '"measurement_budget_ceiling_seconds":1800,'
         '"rationale":"new STA error","reusable_knowledge":"none"}\n```'
     )
     assert decision["flash_attempts"] == 2
     budget_decision = parse_decision(
-        '```json\n{"action":"increase_budget","flash_attempts":1,"flash_directive":"use 3600 seconds",'
+        '```json\n{"action":"increase_budget","flash_attempts":1,'
         '"rationale":"timeout-only closure evidence","reusable_knowledge":"none"}\n```'
     )
     assert budget_decision["action"] == pro_supervisor.INCREASE_BUDGET_ACTION
     readonly = parse_decision(
-        '```json\n{"action":"inspect_existing_sta_evidence","flash_attempts":0,"flash_directive":"read existing",'
+        '```json\n{"action":"inspect_existing_sta_evidence","flash_attempts":0,'
         '"rationale":"need path facts","reusable_knowledge":"none"}\n```'
     )
     assert readonly["action"] == pro_supervisor.READ_ONLY_EVIDENCE_ACTION
     run_evidence = parse_decision(
-        '```json\n{"action":"inspect_run_evidence","flash_attempts":0,"flash_directive":"read path",'
+        '```json\n{"action":"inspect_run_evidence","flash_attempts":0,'
         '"rationale":"need cell chain","reusable_knowledge":"none",'
         '"evidence_request":{"run_id":"02_yosys_ppa--20260909-194017--88282",'
         '"artifact":"sta.log","selector":"worst_slack","max_lines":180}}\n```'
     )
     assert run_evidence["action"] == RUN_EVIDENCE_ACTION
     alias_evidence = parse_decision(
-        '```json\n{"action":"inspect_run_evidence","flash_attempts":0,"flash_directive":"read path",'
+        '```json\n{"action":"inspect_run_evidence","flash_attempts":0,'
         '"rationale":"need cell chain","reusable_knowledge":"none",'
         '"evidence_request":{"run_id":"latest_measured_sta",'
         '"artifact":"sta.log","selector":"max_arrival","max_lines":180}}\n```'
@@ -100,7 +111,7 @@ def main() -> None:
     assert alias_evidence["evidence_request"]["run_id"] == "latest_measured_sta"
     try:
         parse_decision(
-            '```json\n{"action":"inspect_run_evidence","flash_attempts":0,"flash_directive":"",'
+            '```json\n{"action":"inspect_run_evidence","flash_attempts":0,'
             '"rationale":"","reusable_knowledge":"none",'
             '"evidence_request":{"run_id":"../secret","artifact":"sta.log",'
             '"selector":"worst_slack","max_lines":180}}\n```'
@@ -111,16 +122,16 @@ def main() -> None:
         raise AssertionError("unsafe evidence run id was accepted")
     echoed_template = (
         '模型决策\n```json\n'
-        '{"action":"repair_harness","flash_attempts":0,"flash_directive":"fix parse",'
+        '{"action":"repair_harness","flash_attempts":0,'
         '"rationale":"evidence","reusable_knowledge":"none"}\n```\n'
         '日志回显的 prompt 模板\n```json\n'
         '{"action":"continue|revise_task_card|repair_harness|record_reusable_knowledge|stop_for_debug",'
-        '"flash_attempts":1,"flash_directive":"","rationale":"","reusable_knowledge":"append|none"}\n```'
+        '"flash_attempts":1,"rationale":"","reusable_knowledge":"append|none"}\n```'
     )
     assert parse_decision(echoed_template)["action"] == "repair_harness"
     try:
         parse_decision(
-            '```json\n{"action":"continue","flash_attempts":7,"flash_directive":"",'
+            '```json\n{"action":"continue","flash_attempts":7,'
             '"rationale":"","reusable_knowledge":"none"}\n```'
         )
     except ValueError:
@@ -129,7 +140,7 @@ def main() -> None:
         raise AssertionError("out-of-range Flash batch was accepted")
 
     weak_knowledge = parse_decision(
-        '```json\n{"action":"continue","flash_attempts":1,"flash_directive":"",'
+        '```json\n{"action":"continue","flash_attempts":1,'
         '"rationale":"","reusable_knowledge":"append"}\n```'
     )
     assert weak_knowledge["action"] == "continue"
@@ -137,7 +148,11 @@ def main() -> None:
         packet = decision_packet_fixture()
         accepted = {
             **packet["identity"], "action": "continue", "flash_attempts": 2,
-            "flash_directive": "two bounded attempts", "rationale": "current evidence",
+            "campaign_profile": "rtl_local_targeted",
+            "campaign_objective": "two bounded attempts",
+            "campaign_scope_paths": ["rtl"],
+            "measurement_budget_ceiling_seconds": 1800,
+            "rationale": "current evidence",
             "reusable_knowledge": "none",
         }
         invocations: list[list[str]] = []
@@ -353,14 +368,14 @@ def main() -> None:
             pro_supervisor.OPTIMIZATION_OBSERVATION = old_observation_path
     expansion = parse_decision(
         '```json\n{"action":"expand_blackbox","module":"p16_tensor_loader","flash_attempts":0,\n'
-        '"flash_directive":"expand one","rationale":"link and STA are real",'
+        '"rationale":"link and STA are real",'
         '"reusable_knowledge":"none"}\n```'
     )
     assert expansion["action"] == EXPAND_BLACKBOX_ACTION
     assert expansion["module"] == "p16_tensor_loader"
     unknown_expansion = parse_decision(
         '```json\n{"action":"expand_blackbox","module":"does_not_exist","flash_attempts":0,\n'
-        '"flash_directive":"","rationale":"","reusable_knowledge":"none"}\n```'
+        '"rationale":"","reusable_knowledge":"none"}\n```'
     )
     expansion_packet = decision_packet_fixture()
     expansion_packet["allowed_actions"]["expand_blackbox"] = {
@@ -373,7 +388,7 @@ def main() -> None:
     assert decision_error(unknown_expansion, expansion_packet)
     try:
         parse_decision(
-            '```json\n{"action":"record_reusable_knowledge","flash_attempts":0,"flash_directive":"",'
+            '```json\n{"action":"record_reusable_knowledge","flash_attempts":0,'
             '"rationale":"","reusable_knowledge":"none"}\n```'
         )
     except ValueError:
@@ -400,10 +415,31 @@ def main() -> None:
     packet = decision_packet_fixture()
     valid_proposal = {
         **packet["identity"], "action": "continue", "flash_attempts": 1,
-        "flash_directive": "bounded batch", "rationale": "evidence",
+        "campaign_profile": "rtl_local_targeted",
+        "campaign_objective": "bounded batch",
+        "campaign_scope_paths": ["rtl"],
+        "measurement_budget_ceiling_seconds": 1800,
+        "rationale": "evidence",
         "reusable_knowledge": "none",
     }
     assert decision_error(valid_proposal, packet) is None
+    assert decision_error(
+        {**valid_proposal, "campaign_profile": "invented_strategy"}, packet)
+    assert decision_error(
+        {**valid_proposal, "campaign_scope_paths": ["harness/ppa.toml"]}, packet)
+    try:
+        parse_decision(
+            '```json\n{"action":"continue","flash_attempts":1,'
+            '"flash_directive":"legacy second strategy entrance",'
+            '"rationale":"","reusable_knowledge":"none"}\n```')
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("removed flash_directive was still accepted")
+    materialized_campaign = materialize_executor_request(valid_proposal, packet)
+    assert "flash_directive" not in materialized_campaign
+    assert materialized_campaign["campaign_contract"]["max_steps"] == 1
+    assert materialized_campaign["campaign_contract"]["allowed_paths"] == ["rtl"]
     assert decision_error(
         {**valid_proposal, "executor_ref": "project.expand_blackbox"}, packet)
     assert decision_error(
@@ -768,7 +804,7 @@ def main() -> None:
             identity = pending_packet["identity"]
             pending_decision = {
                 **identity, "action": "continue", "flash_attempts": 1,
-                "flash_directive": "strategic text", "rationale": "pending",
+                "rationale": "pending",
                 "reusable_knowledge": "none",
             }
             assert decision_error(pending_decision, pending_packet) is None
@@ -777,7 +813,8 @@ def main() -> None:
             assert materialized["action"] == "continue"
             assert materialized["executor_ref"] == "flash.run"
             assert materialized["operation_id"]
-            assert "all_inputs -no_clocks" in materialized["flash_directive"]
+            assert materialized["campaign_contract"]["mutation_policy"] == "read_only"
+            assert "all_inputs -no_clocks" in materialized["campaign_contract"]["objective"]
 
             resume_contract = {
                 "schema_version": 1, "contract_kind": "mainline_resume",
@@ -943,9 +980,16 @@ def main() -> None:
     assert "stdin=subprocess.DEVNULL" in ppa_source
     assert "def measurement_timeout_is_incomplete(" not in ppa_source
     assert "normalize_measurement_outcome(" in ppa_source
-    assert "run_with_infra_retry(final_command, final_log)" in ppa_source
-    assert "final_regression.json" in ppa_source
+    assert "run_with_infra_retry(final_command, final_log)" not in ppa_source
+    assert "final_regression.json" not in ppa_source
     assert "forced-blackbox-expansion-module" in ppa_source
+    assert "def verify_existing_optimization(" not in ppa_source
+    assert "--optimization-" not in ppa_source
+    for removed_optimization_controller_state in (
+            "--max-rtl-repair-attempts", "optimization_failures",
+            "optimization_repair_attempts", "mainline_resume",
+            "optimization_editing", "optimization_rolled_back"):
+        assert removed_optimization_controller_state not in ppa_source
     supervisor_source = (ROOT / "harness/pro_supervisor.py").read_text(encoding="utf-8")
     assert "def measurement_timeout_is_incomplete(" not in supervisor_source
     assert "def measurement_timeout_batch_is_incomplete(" not in supervisor_source
@@ -955,7 +999,8 @@ def main() -> None:
     for removed_closure_counter in (
             "closure_measurement_retries", "max_closure_measurement_retries",
             "max-closure-measurement-retries", "measurement_retry_count",
-            "measurement_retry_limit", "retry_limit_reached",
+            "measurement_retry_limit", "measurement_incomplete_batches",
+            "retry_limit_reached",
             "measurement_retry_allowed"):
         assert removed_closure_counter not in supervisor_source
         assert removed_closure_counter not in decision_packet_source
@@ -964,6 +1009,9 @@ def main() -> None:
     assert "def _functional_transport_uncertain(" not in registry_source
     assert 'result.get("ppa_exit") in (0, 124)' not in registry_source
     adapter_source = (ROOT / "harness/task02_project_adapter.py").read_text(encoding="utf-8")
+    assert '"--max-rtl-repair-attempts"' not in adapter_source
+    assert '"rolled_back_no_change"' not in adapter_source
+    assert '"rolled_back"' not in adapter_source
     assert adapter_source.count('"measurement_incomplete": True') == 1
     assert 'audit.get("measurement_incomplete") is True' in adapter_source
     closure_source = (ROOT.parent / "RTLskill/rtl-closure-governance/scripts/sta_closure_audit.py").read_text(
@@ -1003,6 +1051,7 @@ def main() -> None:
     assert "optimization_run_campaign" in supervisor_source
     assert "optimization_execute_request" in supervisor_source
     assert '"project.verify_optimization"' in supervisor_source
+    assert '"capability.resolve_sta_scope"' in supervisor_source
     assert "direct_optimization" not in supervisor_source
     assert '"action": "execute_skill_request"' not in supervisor_source
     assert "match_optimization_obligation" not in supervisor_source
@@ -1019,6 +1068,12 @@ def main() -> None:
         encoding="utf-8")
     assert "compact_optimization_context" not in bridge_source
     assert "persist_state" not in bridge_source
+    optimization_executor_source = (
+        ROOT / "harness/task02_optimization_executor.py").read_text(encoding="utf-8")
+    for forbidden_executor_owner in (
+            "sta_scope_decision", "closure_governance_result", "optimization.edit",
+            "optimization.rollback", "accepted", "rollback_required"):
+        assert forbidden_executor_owner not in optimization_executor_source
     adapter_source = (ROOT / "harness/task02_project_adapter.py").read_text(
         encoding="utf-8")
     for forbidden in (
@@ -1047,7 +1102,21 @@ def main() -> None:
     assert "def evidence_artifact_refs(" not in adapter_source
     assert "def evidence_model_command(" not in adapter_source
     assert 'state["guidance_cycles"] = int(state.get("guidance_cycles", 0)) + 1' in supervisor_source
-    assert load_project_adapter(ROOT / "harness.toml", ROOT).api_version == 10
+    ppa_source = (ROOT / "harness/ppa_agent_loop.py").read_text(encoding="utf-8")
+    assert "--campaign-contract" in ppa_source
+    assert "planning_policy_from_reply" not in ppa_source
+    assert "--supervisor-directive" not in ppa_source
+    assert "--force-full-measurement" not in ppa_source
+    assert "--final-regression" not in ppa_source
+    assert "full_ppa_every_batches" not in supervisor_source
+    assert "full_regression_every_batches" not in supervisor_source
+    assert "flash_directive_" not in supervisor_source
+    contract_source = (ROOT / "harness/flash_campaign_contract.py").read_text(
+        encoding="utf-8")
+    assert "def validate_campaign_contract(" in contract_source
+    assert "def parse_work_package(" in contract_source
+    assert "def actual_changes_error(" in contract_source
+    assert load_project_adapter(ROOT / "harness.toml", ROOT).api_version == 12
     functional_source = (ROOT / "scripts/remote_task02_functional.sh").read_text(encoding="utf-8")
     assert "environment export failed before remote functional run" in functional_source
     assert "INFRA_EXIT=75" in functional_source

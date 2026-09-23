@@ -13,6 +13,8 @@ import hashlib
 import json
 from typing import Dict, Mapping, Optional
 
+from flash_campaign_contract import (REQUIRED_ESCALATIONS, SCHEMA_VERSION as CAMPAIGN_SCHEMA_VERSION,
+                                     validate_campaign_contract)
 from project_adapter_api import decision_error
 
 
@@ -41,6 +43,72 @@ INTERNAL_SKILL_ACTIONS = {
     "optimize_rtl", "run_optimization_edit", "verify_optimization_candidate",
     "retry_measurement", "defer_optimization", "rollback_optimization",
 }
+MEASUREMENT_BUDGET_LEVELS = [180, 600, 1800, 3600, 7200]
+TOOLCHAIN_PATHS = [
+    "rtl",
+    "harness/ppa_preflight.ys",
+    "harness/ppa_measure.ys",
+    "harness/ppa.toml",
+    "scripts/remote_yosys_round.sh",
+]
+STANDARD_CAMPAIGN_PROFILES = {
+    "rtl_local_targeted": {
+        "repair_domain": "rtl_optimization", "mutation_policy": "local",
+        "allowed_path_roots": ["rtl"], "verification_level": "sta_targeted",
+        "measurement_partitions": [],
+        "measurement_budget_ceiling_values": MEASUREMENT_BUDGET_LEVELS,
+    },
+    "rtl_architecture_full": {
+        "repair_domain": "rtl_optimization", "mutation_policy": "architecture",
+        "allowed_path_roots": ["rtl"], "verification_level": "sta_full",
+        "measurement_partitions": [],
+        "measurement_budget_ceiling_values": [1800, 3600, 7200],
+    },
+    "functional_local": {
+        "repair_domain": "functional_repair", "mutation_policy": "local",
+        "allowed_path_roots": ["rtl"], "verification_level": "functional",
+        "measurement_partitions": [], "measurement_budget_ceiling_values": [],
+    },
+    "toolchain_scoped_full": {
+        "repair_domain": "toolchain_repair", "mutation_policy": "architecture",
+        "allowed_path_roots": TOOLCHAIN_PATHS, "verification_level": "sta_full",
+        "measurement_partitions": [],
+        "measurement_budget_ceiling_values": [1800, 3600, 7200],
+    },
+    "audit_read_only": {
+        "repair_domain": "audit", "mutation_policy": "read_only",
+        "allowed_path_roots": [], "verification_level": "none",
+        "measurement_partitions": [], "measurement_budget_ceiling_values": [],
+    },
+    "measurement_read_only": {
+        "repair_domain": "measurement", "mutation_policy": "read_only",
+        "allowed_path_roots": [], "verification_level": "sta_targeted",
+        "measurement_partitions": ["top_level_sta"],
+        "measurement_budget_ceiling_values": MEASUREMENT_BUDGET_LEVELS,
+    },
+}
+
+
+def _campaign_policy(execution_mode: str) -> Dict[str, object]:
+    fixed_objectives = {
+        "verify_pending_harness": "验证已实施且尚未测量的 harness 改动，不允许任何文件修改。",
+        "diagnose_no_path": "执行一次只读 top_level_sta 结构诊断，不允许任何文件修改。",
+        "retry_closure_measurement": "按 Closure Skill 授权重测同一 top_level_sta，不修改测量输入。",
+        "increase_budget": "按 Closure Skill 授权重测同一 top_level_sta，不修改测量输入。",
+        "execute_mainline_transaction": "验证 Registry 登记的黑盒展开主线，不允许额外修改。",
+    }
+    if execution_mode in fixed_objectives:
+        return {
+            "selection": "fixed",
+            "profile": {
+                "repair_domain": "measurement", "mutation_policy": "read_only",
+                "allowed_paths": [], "verification_level": "sta_targeted",
+                "measurement_partitions": ["top_level_sta"],
+                "measurement_budget_ceiling_seconds": 7200,
+            },
+            "objective": fixed_objectives[execution_mode],
+        }
+    return {"selection": "pro", "profiles": STANDARD_CAMPAIGN_PROFILES}
 
 
 class DecisionPacketError(ValueError):
@@ -77,14 +145,18 @@ def _strategic_evidence(stage_record: object) -> Dict[str, object]:
 
 def _action(*, purpose: str, executor_ref: str, execution_mode: str,
             parameters: Optional[Mapping[str, object]] = None,
-            source: str) -> Dict[str, object]:
-    return {
+            source: str, campaign_policy: Optional[Mapping[str, object]] = None
+            ) -> Dict[str, object]:
+    result = {
         "purpose": purpose,
         "executor_ref": executor_ref,
         "execution_mode": execution_mode,
         "parameter_schema": dict(parameters or {}),
         "source": source,
     }
+    if campaign_policy is not None:
+        result["campaign_policy"] = dict(campaign_policy)
+    return result
 
 
 def _merge_action(actions: Dict[str, object], name: str,
@@ -95,8 +167,10 @@ def _merge_action(actions: Dict[str, object], name: str,
         return
     old_schema = _mapping(existing).get("parameter_schema")
     new_schema = spec.get("parameter_schema")
-    if old_schema != new_schema:
-        raise DecisionPacketError(f"conflicting parameter schemas for action {name!r}")
+    old_campaign = _mapping(existing).get("campaign_policy")
+    new_campaign = spec.get("campaign_policy")
+    if old_schema != new_schema or old_campaign != new_campaign:
+        raise DecisionPacketError(f"conflicting execution contracts for action {name!r}")
 
 
 def _contract_action_spec(action: str, contract: Mapping[str, object],
@@ -126,6 +200,8 @@ def _contract_action_spec(action: str, contract: Mapping[str, object],
         execution_mode=executor_mode,
         parameters=parameter_schema,
         source=source,
+        campaign_policy=(_campaign_policy(executor_mode)
+                         if executor_ref == "flash.run" else None),
     )
 
 
@@ -182,37 +258,53 @@ def materialize_executor_request(decision: Mapping[str, object], packet: Mapping
             field: decision.get(field)
             for field in _mapping(spec.get("parameter_schema"))
         },
+        "campaign": {
+            field: decision.get(field)
+            for field in ("campaign_profile", "campaign_objective",
+                          "campaign_scope_paths", "measurement_budget_ceiling_seconds")
+            if field in decision
+        },
     }
     result["operation_id"] = hashlib.sha256(
         json.dumps(operation_seed, ensure_ascii=False, sort_keys=True).encode("utf-8")
     ).hexdigest()
     result["executor_ref"] = executor_ref
     result["execution_mode"] = execution_mode
-    strategic_directive = str(decision.get("flash_directive") or "").strip()
-    if execution_mode == "verify_pending_harness":
-        pending = _mapping(pending_verification)
-        paths = ", ".join(str(path) for path in pending.get("paths", []))
-        summary = str(pending.get("summary") or "")
-        expected = str(pending.get("expected_phase") or "sta_timing_measured|sta_no_timing_path")
-        result["flash_directive"] = (
-            "验证已实施且尚未测量的 harness 改动；零 RTL/harness/reference/TB 修改；"
-            "仅执行 top_level_sta 单网表 smoke。"
-            f"改动文件：{paths}。改动摘要：{summary}。预期阶段：{expected}。"
-        )
-    elif execution_mode == "diagnose_no_path":
-        result["flash_directive"] = (
-            "补齐 sta_no_timing_path 的结构证据；零 RTL/harness/reference/TB 修改；"
-            "仅执行 top_level_sta 单网表 smoke。必须回报 STA_DIAG_STATUS、"
-            "STA_DIAG_CLOCK_PORT_COUNT、STA_DIAG_CLOCK_COUNT、STA_DIAG_REGISTER_COUNT、"
-            "STA_DIAG_DATA_INPUT_COUNT；不得调度完整 PPA。"
-        )
-    elif execution_mode in {"retry_closure_measurement", "increase_budget"}:
-        result["flash_directive"] = (
-            "执行 closure_measurement_incomplete 的受控测量；timeout/truncation 不是 RTL 或"
-            "harness 导出失败；同一测量必须使用严格更高且不超过上限的预算；"
-            "不得修改 RTL、harness 或黑盒名单；仅执行 top_level_sta smoke。"
-            + (f"战略重点：{strategic_directive}" if strategic_directive else "")
-        )
+    campaign_policy = _mapping(spec.get("campaign_policy"))
+    if executor_ref == "flash.run":
+        if campaign_policy.get("selection") == "fixed":
+            profile = dict(_mapping(campaign_policy.get("profile")))
+            objective = str(campaign_policy.get("objective") or execution_mode)
+            if execution_mode == "verify_pending_harness":
+                pending = _mapping(pending_verification)
+                objective += (
+                    f" paths={pending.get('paths', [])}; summary={pending.get('summary', '')};"
+                    f" expected={pending.get('expected_phase', 'sta_timing_measured|sta_no_timing_path')}")
+        else:
+            profiles = _mapping(campaign_policy.get("profiles"))
+            profile = dict(_mapping(profiles.get(str(decision.get("campaign_profile") or ""))))
+            objective = str(decision.get("campaign_objective") or "").strip()
+            profile["allowed_paths"] = list(decision.get("campaign_scope_paths") or [])
+            profile["measurement_budget_ceiling_seconds"] = decision.get(
+                "measurement_budget_ceiling_seconds")
+        contract = {
+            "schema_version": CAMPAIGN_SCHEMA_VERSION,
+            "operation_id": result["operation_id"],
+            "objective": objective,
+            "repair_domain": profile.get("repair_domain"),
+            "mutation_policy": profile.get("mutation_policy"),
+            "allowed_paths": profile.get("allowed_paths", []),
+            "verification_level": profile.get("verification_level"),
+            "measurement_partitions": profile.get("measurement_partitions", []),
+            "measurement_budget_ceiling_seconds": profile.get(
+                "measurement_budget_ceiling_seconds"),
+            "max_steps": decision.get("flash_attempts"),
+            "escalation_conditions": list(REQUIRED_ESCALATIONS),
+        }
+        contract["contract_id"] = hashlib.sha256(json.dumps(
+            contract, ensure_ascii=False, sort_keys=True,
+            separators=(",", ":")).encode("utf-8")).hexdigest()
+        result["campaign_contract"] = validate_campaign_contract(contract)
     return result
 
 
@@ -268,19 +360,22 @@ def build_decision_packet(*, state: Mapping[str, object], stage_record: object,
                 purpose="验证已经实施且尚未测量的 harness 改动",
                 executor_ref="flash.run", execution_mode="verify_pending_harness",
                 parameters={"flash_attempts": {"enum": [1]}},
-                source="project_pending_verification")
+                source="project_pending_verification",
+                campaign_policy=_campaign_policy("verify_pending_harness"))
         elif closure.get("diagnostic_required") is True:
             actions["continue"] = _action(
                 purpose="执行一次零修改 no-path 结构诊断",
                 executor_ref="flash.run", execution_mode="diagnose_no_path",
                 parameters={"flash_attempts": {"enum": [1]}},
-                source="rtl-closure-governance")
+                source="rtl-closure-governance",
+                campaign_policy=_campaign_policy("diagnose_no_path"))
         elif closure.get("measurement_rerun_admissible") is True:
             retry_schema = {"flash_attempts": {"enum": [1]}}
             actions["increase_budget"] = _action(
                 purpose="以严格更高且不超过上限的预算验证同一测量",
                 executor_ref="flash.run", execution_mode="retry_closure_measurement",
-                parameters=retry_schema, source="rtl-closure-governance")
+                parameters=retry_schema, source="rtl-closure-governance",
+                campaign_policy=_campaign_policy("retry_closure_measurement"))
         elif closure.get("structural_repair_required") is True:
             actions["repair_harness"] = _action(
                 purpose="修复确定性的综合/STA harness 结构问题",
@@ -297,7 +392,8 @@ def build_decision_packet(*, state: Mapping[str, object], stage_record: object,
                 purpose="执行下一批已声明的功能或测量工作",
                 executor_ref="flash.run", execution_mode="standard_batch",
                 parameters={"flash_attempts": {"minimum": 1, "maximum": 6}},
-                source="project_batch_policy")
+                source="project_batch_policy",
+                campaign_policy=_campaign_policy("standard_batch"))
 
         contracts = _validated_contracts(stage_record)
         global_contract_seen = False

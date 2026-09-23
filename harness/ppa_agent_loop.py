@@ -16,6 +16,8 @@ from typing import Dict, List, Optional, Tuple
 
 from environment import REMOTE_HOST, REMOTE_PROJECT
 from design_context_adapter import design_context_slice
+from flash_campaign_contract import (CampaignContractError, actual_changes_error,
+                                     load_campaign_contract, parse_work_package)
 from rtl_skill_bridge import (CLOSURE_GOVERNANCE_ENV, STA_SCOPE_ENV, TASK02_MEASUREMENT_INPUTS, SkillGateError,
                               closure_governance_result,
                               conservative_rtl_change_packet, content_fingerprint,
@@ -29,7 +31,11 @@ STATUS = ROOT / "status/task02_agent.status"
 STRATEGY_ARCHIVE = ROOT / "runs/strategy_archive"
 REMOTE = REMOTE_HOST
 REMOTE_STATUS = f"{REMOTE_PROJECT}/status/task02_agent.status"
-MANAGED_PATHS = (Path("rtl"), Path("harness/ppa_measure.ys"), Path("harness/ppa_preflight.ys"), Path("harness/ppa.toml"), Path("scripts/remote_yosys_round.sh"))
+MANAGED_PATHS = (
+    Path("rtl"), Path("harness"), Path("scripts"), Path("tasks"), Path("tests"), Path("docs"),
+    Path("tb"), Path("tools"), Path("archive"), Path("projects"), Path("reference.py"),
+    Path("README.md"), Path("harness.toml"), Path("questionAndsolution.md"), Path(".gitignore"),
+)
 INFRA_EXIT = 75
 INFRA_UNCERTAIN_EXIT = 76
 MEASUREMENT_TIMEOUT_EXIT = 124
@@ -37,8 +43,6 @@ INFRA_RETRIES = 2
 DEFAULT_MEASUREMENT_BUDGET_SECONDS = 180
 DEFAULT_MEASUREMENT_BUDGET_LEVELS = (180, 600, 1800, 3600, 7200)
 FULL_MEASUREMENT_MIN_BUDGET_SECONDS = 1800
-MAX_TARGETED_PARTITIONS = 4
-TARGETED_MEASUREMENTS_BEFORE_FULL = 2
 # A change to any RTL needs more than the 8-token smoke test.  These filename
 # tokens identify control/data-path changes that also require the full prompt-0
 # regression before their PPA numbers may guide another RTL edit.
@@ -185,14 +189,6 @@ def restore(snapshot_root: Path) -> None:
             shutil.copy2(source, target)
 
 
-def restore_one(snapshot_root: Path, relative: Path) -> None:
-    source, target = snapshot_root / relative, ROOT / relative
-    if not source.is_file():
-        raise OSError(f"candidate checkpoint source missing: {source}")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, target)
-
-
 def diff(before: Path, after: Path) -> str:
     result = []  # type: List[str]
     old_files = {path.relative_to(before) for path in before.rglob("*") if path.is_file()}
@@ -280,20 +276,6 @@ def configured_top_level_blackboxes() -> List[str]:
     return []
 
 
-def rtl_file_for_module(module: str) -> Optional[Path]:
-    """Resolve one module declaration to one project-relative RTL source."""
-    declaration = re.compile(rf"^\s*module\s+{re.escape(module)}\b", re.MULTILINE)
-    matches = []
-    for path in sorted((ROOT / "rtl").rglob("*")):
-        if path.is_file() and path.suffix.lower() in (".v", ".sv"):
-            try:
-                if declaration.search(path.read_text(encoding="utf-8", errors="replace")):
-                    matches.append(path.relative_to(ROOT))
-            except OSError:
-                continue
-    return matches[0] if len(matches) == 1 else None
-
-
 def configured_partition_timeouts() -> Dict[str, int]:
     """Read each partition's declared tool budget (``timeout_s``) from harness/ppa.toml.
 
@@ -338,100 +320,38 @@ def partition_budget_floor(partitions: List[str], levels: Tuple[int, ...]) -> in
     return next((level for level in levels if level >= required), levels[-1])
 
 
-def planning_policy_from_reply(planner: str, valid_partitions: List[str]) -> Tuple[str, str, List[str], str]:
-    """Parse a deliberately small, controller-validated measurement contract.
-
-    Missing or malformed directives remain safe: preserve the historic full
-    measurement instead of guessing a partition from prose.
-    """
-    change_match = re.search(r"^`?\s*change_mode:\s*(local|architecture)\s*`?\s*$", planner, re.MULTILINE)
-    measurement_match = re.search(r"^`?\s*measurement_mode:\s*(targeted|full)\s*`?\s*$", planner, re.MULTILINE)
-    affected_match = re.search(r"^`?\s*affected_partitions:\s*(.*?)\s*`?\s*$", planner, re.MULTILINE)
-    change_mode = change_match.group(1) if change_match else "local"
-    measurement_mode = measurement_match.group(1) if measurement_match else "full"
-    raw = affected_match.group(1).strip() if affected_match else ""
-    requested = [item.strip() for item in raw.split(",") if item.strip() and item.strip().lower() != "none"]
-    valid = set(valid_partitions)
-    if measurement_mode != "targeted":
-        return change_mode, "full", [], "planner_full_or_default"
-    if change_mode != "local":
-        return change_mode, "full", [], "controller_architecture_requires_full"
-    if (not requested or len(requested) > MAX_TARGETED_PARTITIONS or len(set(requested)) != len(requested)
-            or any(item not in valid for item in requested)):
-        return change_mode, "full", [], "controller_invalid_targeted_partition_request"
-    return change_mode, "targeted", requested, "planner_targeted_request"
-
-
-def targeted_measurements_since_full() -> int:
-    """Count completed targeted measurements since the last completed full one."""
-    candidates = sorted(agent_result_paths(), key=lambda path: path.stat().st_mtime, reverse=True)
-    count = 0
-    for path in candidates:
-        result = json.loads(path.read_text(encoding="utf-8"))
-        plan = result.get("measurement_plan_mode")
-        ppa_rc = result.get("ppa_exit")
-        if plan == "full" and ppa_rc not in (None, INFRA_EXIT):
-            return count
-        if plan == "targeted" and ppa_rc not in (None, INFRA_EXIT):
-            count += 1
-    return count
-
-
 def decide_measurement_plan(
-    planned_change_mode: str,
-    planned_measurement_mode: str,
-    planned_partitions: List[str],
-    planned_measurement_source: str,
+    verification_level: str,
+    contract_partitions: List[str],
     rtl_changed_paths: List[str],
     non_rtl_changed_paths: List[str],
-    force_full: bool,
-    targeted_count: int,
     sta_closure_gate: bool = False,
 ) -> Tuple[str, List[str], str]:
-    """Controller-owned measurement plan, independent of AI prose.
-
-    Full configured-partition coverage remains the safe default.  Targeted PPA
-    is permitted only for a real, single-file local RTL hypothesis (with a
-    periodic full milestone).  A script-only change -- a measurement harness or
-    scheduler edit with zero RTL edits -- never forces a full repeat: when the
-    planner supplies a validated targeted partition request, the controller runs
-    exactly those partitions (one requested partition as a single-netlist smoke,
-    several as a targeted set), so a closure/STA harness fix actually reaches the
-    partition it modified.  An edit round that produced no managed-file change at
-    all (no RTL edit and no harness/script edit) normally carries no new
-    evidence, so it routes to the 16-token functional counting point; the one
-    exception is an explicit, validated targeted PPA request from the planner to
-    re-verify an already-landed measurement/closure hypothesis (for example a
-    previously applied harness fix whose PPA/STA verification never completed).
-    That is a concrete PPA hypothesis, not a pure counting point, so it is
-    honored as a targeted measurement of the requested partitions instead of
-    being silently downgraded to the counting point.
-    """
+    """Derive the concrete project measurement from the immutable verification level."""
     # A real top-level STA closure failure is a prerequisite failure, not an
     # optimization candidate.  Do not spend a generic full-PPA milestone or a
     # functional-counting point while a deterministic audit says the closure
     # itself cannot be read/linked/timed.  One top_level_sta smoke (at its
     # partition-timeout budget) is the smallest falsifiable verification.
-    if sta_closure_gate:
+    if sta_closure_gate and verification_level in {"sta_targeted", "sta_full"}:
         return "smoke", ["top_level_sta"], "controller_sta_closure_gate"
-    if force_full:
-        return "full", [], "supervisor_forced_full_milestone"
-    if (not rtl_changed_paths and not non_rtl_changed_paths
-            and planned_measurement_mode != "targeted"):
+    if verification_level == "sta_full":
+        return "full", [], "pro_campaign_contract"
+    if verification_level != "sta_targeted":
+        return ("functional_counting" if verification_level == "functional" else
+                "preflight_only" if verification_level == "functional_preflight" else
+                "none"), [], "pro_campaign_contract"
+    if not rtl_changed_paths and not non_rtl_changed_paths and not contract_partitions:
         return "functional_counting", [], "controller_functional_counting_point"
-    if planned_measurement_mode != "targeted":
-        return "full", [], planned_measurement_source
-    if planned_change_mode == "local" and len(rtl_changed_paths) == 1:
-        if targeted_count >= TARGETED_MEASUREMENTS_BEFORE_FULL:
-            return "full", [], "controller_periodic_full_after_targeted"
-        return "targeted", planned_partitions, planned_measurement_source
+    if rtl_changed_paths:
+        return "targeted", contract_partitions, "pro_campaign_contract"
     if not rtl_changed_paths and non_rtl_changed_paths:
-        if len(planned_partitions) == 1:
-            return "smoke", planned_partitions, planned_measurement_source
-        return "targeted", planned_partitions, planned_measurement_source
+        if len(contract_partitions) == 1:
+            return "smoke", contract_partitions, "pro_campaign_contract"
+        return "targeted", contract_partitions, "pro_campaign_contract"
     if not rtl_changed_paths and not non_rtl_changed_paths:
-        return "targeted", planned_partitions, planned_measurement_source
-    return "full", [], "controller_targeted_requires_single_rtl_local_change"
+        return "targeted", contract_partitions, "pro_campaign_contract"
+    return "targeted", contract_partitions, "pro_campaign_contract"
 
 
 def measurement_config_fingerprint() -> str:
@@ -590,16 +510,6 @@ def latest_measurement_scope() -> str:
     return match.group(1) if match else "UNKNOWN"
 
 
-def load_supervisor_directive(path: Optional[Path]) -> str:
-    """Load a bounded project-local Pro instruction without bypassing policy."""
-    if path is None:
-        return ""
-    resolved = path.resolve()
-    if ROOT not in resolved.parents or not resolved.is_file():
-        raise ValueError("--supervisor-directive must be an existing file inside this project")
-    return resolved.read_text(encoding="utf-8", errors="replace")[:12000]
-
-
 def persisted_measurement_counters() -> Tuple[int, int]:
     """Resume task-level cadence counters across separate controller launches."""
     candidates = sorted(agent_result_paths(), key=lambda path: path.stat().st_mtime, reverse=True)
@@ -662,20 +572,36 @@ def record(root: Path, result: dict, changes: str = "", planner: str = "", execu
             handle.write(f"- planner 是否违规写入：{result['planner_modified_managed_inputs']}；executor 半成品是否已回退：{result.get('executor_partial_changes_reverted', False)}。\n")
             handle.write(f"- 按 fail-fast 政策：未运行功能快检、综合预检或 PPA，等待模型/配额恢复后从新的回合重启。\n")
             handle.write(f"- 详细证据：`{root.relative_to(ROOT)}/result.json`、planner/executor 日志与可能的 `changes.diff`。\n")
-        elif result["kind"] == "policy_violation":
-            handle.write("### 修改范围违反策略：本轮已回退，未运行验证\n\n")
-            handle.write(f"- 原因：{result['note']}\n")
+        elif result["kind"] == "contract_violation":
+            handle.write("### Campaign contract 违规：本轮已停止\n\n")
+            handle.write(f"- 原因：{result.get('reason', result.get('detail', '未测得'))}\n")
             handle.write(f"- 检测到 RTL 改动：{', '.join(result.get('rtl_changed_paths', []))}\n")
             handle.write(f"- 详细证据：`{root.relative_to(ROOT)}/result.json`、`changes.diff` 与 AI 日志。\n")
-        else:
+        elif result["kind"] == "audit_step":
+            handle.write("### 只读 Flash 工作包完成\n\n")
+            handle.write(concise_agent_reply(planner, 1600) + "\n")
+            handle.write(f"- 受管输入改动：{result.get('managed_inputs_changed', False)}。\n")
+            handle.write(f"- 详细证据：`{root.relative_to(ROOT)}/result.json` 与 `work_package.json`。\n")
+        elif result["kind"] == "strategy_revision_required":
+            handle.write("### Campaign 已到战略边界\n\n")
+            handle.write(f"- 原因：{result.get('reason', '未测得')}。\n")
+            handle.write("- 当前 controller 未扩大范围，下一次行动必须由 Pro 重新决策。\n")
+        elif result["kind"] == "baseline":
             handle.write("### 基线真实结果\n\n")
             handle.write(f"- 功能快检（{result['quick_seq_len']} token）：exit {result['functional_exit']}\n")
             handle.write(f"- 综合预检：exit {result.get('preflight_exit', '未运行')}；完整 PPA：exit {result.get('ppa_exit', '未运行')}（状态 {result.get('measurement_status', '未记录')}）\n")
             handle.write(f"- 详细证据：`{root.relative_to(ROOT)}/result.json` 与对应工具日志。\n")
+        else:
+            handle.write("### Controller 边界结果\n\n")
+            handle.write(f"- kind={result.get('kind')}；原因={result.get('reason', result.get('note', '未测得'))}。\n")
+            handle.write(f"- 详细证据：`{root.relative_to(ROOT)}/result.json`。\n")
         handle.write("\n")
 
 
-def baseline(seq_len: int, preflight_only: bool, preflight_timeout: int, measurement_budget: int) -> Tuple[int, Optional[int], Optional[int]]:
+def baseline(seq_len: int, preflight_only: bool, preflight_timeout: int,
+             measurement_budget: int,
+             measurement_partitions: Optional[List[str]] = None
+             ) -> Tuple[int, Optional[int], Optional[int]]:
     root = ROOT / "runs" / f"agent-02_yosys_ppa--{dt.datetime.now():%Y%m%d-%H%M%S}--baseline"
     root.mkdir(parents=True)
     set_stage("baseline_functional", "baseline", f"seq_len={seq_len}")
@@ -685,8 +611,11 @@ def baseline(seq_len: int, preflight_only: bool, preflight_timeout: int, measure
         set_stage("synthesis_preflight", "baseline", f"Yosys lowering gate; timeout={preflight_timeout}s")
         preflight = run(preflight_command(preflight_timeout), root / "preflight.log")
         if preflight == 0 and not preflight_only:
-            set_stage("baseline_measurement", "baseline", f"Yosys/ABC probe; timeout={measurement_budget}s")
-            ppa = run(measurement_command(measurement_budget), root / "ppa.log")
+            selection = ",".join(measurement_partitions) if measurement_partitions else "all"
+            set_stage("baseline_measurement", "baseline",
+                      f"Yosys/ABC probe; partitions={selection}; timeout={measurement_budget}s")
+            ppa = run(measurement_command(
+                measurement_budget, measurement_partitions), root / "ppa.log")
     audit = latest_sta_closure_audit() if ppa is not None else {}
     normalized_outcome = Task02ProjectAdapter.normalize_measurement_outcome(
         results=[{"kind": "baseline", "functional_exit": functional,
@@ -694,6 +623,9 @@ def baseline(seq_len: int, preflight_only: bool, preflight_timeout: int, measure
         process_exit=0, closure_audit=audit, preflight_only=preflight_only)
     result = {"kind": "baseline", "time": now(), "quick_seq_len": seq_len, "functional_exit": functional,
               "preflight_exit": preflight, "ppa_exit": ppa, "measurement_timeout_seconds": measurement_budget,
+              "measurement_plan_mode": ("targeted" if measurement_partitions else
+                                        "full" if ppa is not None else "preflight_only"),
+              "measurement_partitions": list(measurement_partitions or []),
               "measurement_status": normalized_outcome["status"],
               "sta_closure_audit": audit,
               "measurement_budget_source": "baseline_default",
@@ -760,7 +692,7 @@ def forced_blackbox_expansion(module: str, args: argparse.Namespace,
     if full_rc == 0:
         set_stage("synthesis_preflight", "expansion", f"module={module}; timeout={args.preflight_timeout_seconds}s")
         preflight_rc = run(preflight_command(args.preflight_timeout_seconds), root / "preflight.log")
-    if preflight_rc == 0 and not args.preflight_only:
+    if preflight_rc == 0:
         budget = partition_budget_floor(["top_level_sta"], measurement_budget_levels)
         set_stage("ppa", "expansion", f"module={module}; partition=top_level_sta; timeout={budget}s")
         ppa_rc = run(measurement_command(budget, ["top_level_sta"]), root / "ppa.log")
@@ -830,261 +762,11 @@ def omp_command(model: Optional[str]) -> List[str]:
     return command + (["--model", model] if model else [])
 
 
-def verify_existing_optimization(args: argparse.Namespace, optimization_rtl_path: Path,
-                                 optimization_baseline: Path,
-                                 measurement_budget_levels: Tuple[int, ...],
-                                 valid_partitions: List[str]) -> int:
-    """Verify the preserved candidate without invoking planner or executor."""
-    root = ROOT / "runs" / f"agent-02_yosys_ppa--{dt.datetime.now():%Y%m%d-%H%M%S}--verify"
-    root.mkdir(parents=True)
-    baseline_file = optimization_baseline / optimization_rtl_path
-    current_file = ROOT / optimization_rtl_path
-    if not baseline_file.is_file() or not current_file.is_file():
-        parser_note = "optimization verify-only baseline or RTL source is missing"
-        (root / "planner.log").write_text(parser_note + "\n", encoding="utf-8")
-        (root / "executor.log").write_text("no edit was attempted\n", encoding="utf-8")
-        result = {
-            "kind": "infrastructure_uncertain", "attempt": 1, "time": now(),
-            "optimization_candidate_id": args.optimization_candidate_id,
-            "optimization_module": args.optimization_module,
-            "optimization_status": "preserved_infra_uncertain",
-            "note": parser_note,
-        }
-        record(root, result)
-        set_stage("infra_uncertain", "verify", parser_note)
-        return INFRA_UNCERTAIN_EXIT
-
-    before_lines = baseline_file.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
-    after_lines = current_file.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
-    changes = "".join(difflib.unified_diff(
-        before_lines, after_lines,
-        fromfile=f"baseline/{optimization_rtl_path.as_posix()}",
-        tofile=f"current/{optimization_rtl_path.as_posix()}",
-    ))
-    (root / "changes.diff").write_text(changes, encoding="utf-8")
-    (root / "planner.log").write_text(
-        "controller verify-only：复用已保存候选，不调用规划模型，不产生新编辑。\n",
-        encoding="utf-8")
-    (root / "executor.log").write_text(
-        "controller verify-only：executor 被跳过；只运行契约要求的验证。\n",
-        encoding="utf-8")
-    if not changes:
-        result = {
-            "kind": "iteration", "attempt": 1, "time": now(),
-            "planner_exit": 0, "executor_exit": 0, "managed_inputs_changed": False,
-            "rtl_changed_paths": [], "optimization_candidate_id": args.optimization_candidate_id,
-            "optimization_module": args.optimization_module,
-            "optimization_status": "no_change", "mainline_resume": False,
-            "changes": str((root / "changes.diff").relative_to(ROOT)),
-            "note": "candidate equals checkpoint; no optimization remains to verify",
-        }
-        record(root, result, changes, tail(root / "planner.log"), tail(root / "executor.log"))
-        set_stage("optimization_complete", "verify", "candidate equals checkpoint; resume mainline")
-        return 0
-
-    current_fingerprint = hashlib.sha256(current_file.read_bytes()).hexdigest()
-    verification_context_fingerprint = measurement_config_fingerprint()
-    identity_matches = bool(args.optimization_expected_rtl_sha256
-                            and current_fingerprint == args.optimization_expected_rtl_sha256)
-    # Candidate identity is necessary but never sufficient evidence.  Reuse is
-    # legal only when the caller supplies an explicit successful proof bound to
-    # this exact RTL image.
-    functional_evidence_reused = bool(
-        identity_matches
-        and args.optimization_functional_proof_rtl_sha256 == current_fingerprint
-        and args.optimization_functional_proof_context_sha256
-            == verification_context_fingerprint)
-    preflight_evidence_reused = bool(
-        identity_matches
-        and args.optimization_preflight_proof_rtl_sha256 == current_fingerprint
-        and args.optimization_preflight_proof_context_sha256
-            == verification_context_fingerprint)
-    quick_rc = medium_rc = mandatory_full_rc = preflight_rc = None
-    if not functional_evidence_reused:
-        set_stage("functional_quick", "verify", "candidate has no matching functional proof; seq_len=8")
-        quick_rc = run_with_infra_retry(functional_command(args.quick_seq_len), root / "functional_quick.log")
-        if quick_rc == 0:
-            set_stage("functional_medium", "verify", f"candidate re-verification; seq_len={args.medium_seq_len}")
-            medium_rc = run_with_infra_retry(functional_command(args.medium_seq_len), root / "functional_medium.log")
-        if quick_rc == 0 and medium_rc == 0:
-            set_stage("functional_full", "verify", "candidate re-verification; prompt=0 seq_len=48")
-            mandatory_full_rc = run_with_infra_retry(full_functional_command(), root / "functional_full.log")
-    else:
-        quick_rc = medium_rc = mandatory_full_rc = 0
-        (root / "functional_quick.log").write_text(
-            "functional evidence reused: explicit passing proof matches candidate RTL SHA-256\n", encoding="utf-8")
-        (root / "functional_medium.log").write_text(
-            "functional evidence reused: no RTL edit occurred\n", encoding="utf-8")
-        (root / "functional_full.log").write_text(
-            "functional evidence reused: no RTL edit occurred\n", encoding="utf-8")
-    if all(value == 0 for value in (quick_rc, medium_rc, mandatory_full_rc)):
-        if preflight_evidence_reused:
-            preflight_rc = 0
-            (root / "preflight.log").write_text(
-                "preflight evidence reused: explicit passing proof matches candidate RTL SHA-256\n",
-                encoding="utf-8")
-        else:
-            set_stage("synthesis_preflight", "verify", "candidate has no matching Yosys preflight proof")
-            preflight_rc = run(preflight_command(args.preflight_timeout_seconds), root / "preflight.log")
-
-    scope_gate = None
-    measurement_partitions = [name for name in args.optimization_measurement_partition
-                              if name in valid_partitions]
-    if not measurement_partitions:
-        current_context = design_context_slice(
-            ROOT, rtl_paths=[optimization_rtl_path.as_posix()],
-            module_hints=[args.optimization_module])
-        scope_packet = conservative_rtl_change_packet(
-            changes, [optimization_rtl_path.as_posix()], change_mode="local",
-            remaining_blackboxes=configured_top_level_blackboxes(),
-            affected_modules=[args.optimization_module], design_context=current_context)
-        try:
-            scope_gate = sta_scope_decision(args.sta_scope_skill, scope_packet)
-        except SkillGateError as error:
-            result = {
-                "kind": "infrastructure_uncertain", "attempt": 1, "time": now(),
-                "optimization_candidate_id": args.optimization_candidate_id,
-                "optimization_module": args.optimization_module,
-                "optimization_status": "preserved_infra_uncertain",
-                "sta_scope_gate_error": str(error), "mainline_resume": False,
-            }
-            record(root, result, changes, tail(root / "planner.log"), tail(root / "executor.log"))
-            set_stage("infra_uncertain", "verify", "rtl-sta-scope gate unavailable")
-            return INFRA_UNCERTAIN_EXIT
-        scope = scope_gate.get("scope")
-        if scope == "local_module" and args.optimization_module in valid_partitions:
-            measurement_partitions = [args.optimization_module]
-        elif scope == "affected_cone":
-            measurement_partitions = [name for name in scope_gate.get("affected_modules", [])
-                                      if name in valid_partitions]
-        if not measurement_partitions:
-            measurement_partitions = ["top_level_sta"]
-    else:
-        scope_gate = {"scope": "contract_reuse", "affected_modules": [args.optimization_module],
-                      "reason_codes": ["preserved_candidate_measurement_retry"]}
-
-    external_verification_required = bool(
-        isinstance(scope_gate, dict)
-        and scope_gate.get("scope") in ("top_level_partial", "top_level_complete")
-        and not args.optimization_consume_external_sta)
-    ppa_rc = None
-    measurement_scope = "UNKNOWN"
-    deterministic_functional_failure = any(
-        value not in (None, 0, INFRA_EXIT, INFRA_UNCERTAIN_EXIT)
-        for value in (quick_rc, medium_rc, mandatory_full_rc))
-    if (not deterministic_functional_failure and preflight_rc == 0
-            and not external_verification_required):
-        budget_floor = partition_budget_floor(measurement_partitions, measurement_budget_levels)
-        requested = args.measurement_default_timeout_seconds
-        measurement_budget = requested if requested in measurement_budget_levels else budget_floor
-        measurement_budget = max(measurement_budget, budget_floor)
-        set_stage("ppa", "verify",
-                  f"verify-only partitions={','.join(measurement_partitions)} timeout={measurement_budget}s")
-        ppa_rc = run(measurement_command(measurement_budget, measurement_partitions), root / "ppa.log")
-        measurement_scope = latest_measurement_scope() if ppa_rc != INFRA_EXIT else "UNKNOWN"
-    else:
-        measurement_budget = max(args.measurement_default_timeout_seconds,
-                                 partition_budget_floor(measurement_partitions, measurement_budget_levels))
-
-    audit = latest_sta_closure_audit() if ppa_rc is not None else {}
-    outcome_facts = {
-        "kind": "iteration", "planner_exit": 0, "executor_exit": 0,
-        "functional_quick_exit": quick_rc, "functional_medium_exit": medium_rc,
-        "mandatory_full_exit": mandatory_full_rc,
-        "preflight_exit": preflight_rc, "ppa_exit": ppa_rc,
-    }
-    normalized_outcome = Task02ProjectAdapter.normalize_measurement_outcome(
-        results=[outcome_facts], process_exit=0, closure_audit=audit)
-    outcome_status = str(normalized_outcome.get("status") or "")
-    if outcome_status in {"infra_failed", "infra_uncertain"}:
-        optimization_status = "preserved_infra_uncertain"
-    elif outcome_status == "functional_failed":
-        optimization_status = "functional_repair_required"
-    elif outcome_status == "preflight_failed":
-        optimization_status = "verification_failed"
-    elif external_verification_required and preflight_rc == 0:
-        optimization_status = "external_verification_required"
-    elif outcome_status == "measurement_incomplete":
-        optimization_status = "measurement_incomplete"
-    elif outcome_status == "complete":
-        optimization_status = "accepted"
-    elif outcome_status in {"measurement_failed", "execution_failed"}:
-        optimization_status = "verification_failed"
-    else:
-        optimization_status = "preserved_infra_uncertain"
-    result = {
-        "kind": "iteration", "attempt": 1, "time": now(), "planner_exit": 0, "executor_exit": 0,
-        "mode": "RTL 优化候选无编辑验证", "managed_inputs_changed": False,
-        "rtl_changed_paths": [optimization_rtl_path.as_posix()],
-        "functional_quick_exit": quick_rc, "functional_medium_exit": medium_rc,
-        "mandatory_medium_exit": medium_rc, "mandatory_full_exit": mandatory_full_rc,
-        "rtl_fingerprint": current_fingerprint,
-        "verification_context_fingerprint": verification_context_fingerprint,
-        "functional_evidence_reused": functional_evidence_reused,
-        "functional_evidence_source": ("explicit_matching_proof" if functional_evidence_reused
-                                       else "fresh_reverification"),
-        "preflight_evidence_reused": preflight_evidence_reused,
-        "preflight_evidence_source": ("explicit_matching_proof" if preflight_evidence_reused
-                                      else "fresh_reverification"),
-        "preflight_exit": preflight_rc, "ppa_exit": ppa_rc,
-        "measurement_status": outcome_status,
-        "measurement_scope": measurement_scope, "measurement_timeout_seconds": measurement_budget,
-        "measurement_budget_source": "optimization_contract_reuse",
-        "measurement_plan_mode": "targeted", "measurement_partitions": measurement_partitions,
-        "measurement_plan_source": "optimization_execution_contract",
-        "sta_scope_gate": scope_gate, "sta_closure_audit": audit,
-        "optimization_candidate_id": args.optimization_candidate_id,
-        "optimization_module": args.optimization_module,
-        "optimization_integration_target": args.optimization_integration_target,
-        "optimization_status": optimization_status,
-        "optimization_repair_attempts": 0,
-        # Verification only reports facts.  Rollback and mainline resume are
-        # owned by the Optimization Skill lifecycle.
-        "mainline_resume": False,
-        "measurement_fingerprint": measurement_config_fingerprint(),
-        "changes": str((root / "changes.diff").relative_to(ROOT)),
-        "planner_log": str((root / "planner.log").relative_to(ROOT)),
-        "executor_log": str((root / "executor.log").relative_to(ROOT)),
-        "functional_log": str((root / "functional_quick.log").relative_to(ROOT)),
-        "preflight_log": str((root / "preflight.log").relative_to(ROOT)),
-        "ppa_log": str((root / "ppa.log").relative_to(ROOT)) if ppa_rc is not None else None,
-    }
-    record(root, result, changes, tail(root / "planner.log"), tail(root / "executor.log"))
-    if ppa_rc is not None and closure_governance_unavailable(audit):
-        set_stage("infra_uncertain", "verify", "rtl-closure-governance unavailable after measurement")
-        return INFRA_UNCERTAIN_EXIT
-    if outcome_status == "infra_uncertain":
-        set_stage("infra_uncertain", "verify", "candidate verification transport uncertain")
-        return INFRA_UNCERTAIN_EXIT
-    if outcome_status == "infra_failed":
-        set_stage("infra_failed", "verify", "candidate verification transport failed")
-        return INFRA_EXIT
-    if optimization_status == "measurement_incomplete":
-        set_stage("measurement_incomplete", "verify", "candidate preserved; bounded retry consumed")
-        return MEASUREMENT_TIMEOUT_EXIT
-    if optimization_status == "external_verification_required":
-        set_stage("external_verification_required", "verify",
-                  "candidate passed functional/preflight gates; top-level STA obligation yielded")
-        return 0
-    terminal_stage = (
-        "optimization_complete" if optimization_status == "accepted" else
-        "optimization_no_change" if optimization_status == "no_change" else
-        "optimization_functional_repair" if optimization_status == "functional_repair_required" else
-        "optimization_verification_failed")
-    set_stage(terminal_stage, "verify",
-              f"candidate={args.optimization_module}; status={optimization_status}")
-    # A deterministic functional mismatch is a domain transition, not a
-    # controller/process failure.  The supervisor must remain alive so the
-    # bounded repair-or-rollback contract can govern the next cycle.
-    return 0
-
-
 def main() -> int:
     global CLOSURE_GOVERNANCE_ROOT, MEASUREMENT_BUDGET_CEILING_SECONDS
     signal.signal(signal.SIGINT, stop_active_process)
     signal.signal(signal.SIGTERM, stop_active_process)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--max-attempts", type=int, default=3)
     parser.add_argument("--model")
     parser.add_argument("--quick-seq-len", type=int, default=8)
     parser.add_argument("--medium-seq-len", type=int, default=16)
@@ -1094,41 +776,11 @@ def main() -> int:
                         help="initial Yosys/ABC probe budget; the planner may select a permitted larger tier")
     parser.add_argument("--measurement-budget-levels", default=",".join(map(str, DEFAULT_MEASUREMENT_BUDGET_LEVELS)),
                         help="comma-separated permitted measurement budgets in seconds")
-    parser.add_argument("--preflight-only", action="store_true", help="run functional + Yosys lowering gate, but skip full ABC PPA")
     parser.add_argument("--skip-baseline", action="store_true")
-    parser.add_argument("--final-regression", action="store_true", help="after all rounds, run prompt-0 full 48-token regression")
-    parser.add_argument("--force-full-measurement", action="store_true",
-                        help="supervisor milestone: disallow targeted PPA for every attempt in this invocation")
-    parser.add_argument("--supervisor-directive", type=Path,
-                        help="bounded Pro instruction file inside this project; advisory only")
+    parser.add_argument("--campaign-contract", type=Path, required=True,
+                        help="immutable Pro campaign contract JSON inside this project")
     parser.add_argument("--forced-blackbox-expansion-module",
                         help="controller-owned verification of one module removed from top_level_sta blackboxes")
-    parser.add_argument("--optimization-module",
-                        help="controller-selected expanded module; restrict this invocation to its RTL source")
-    parser.add_argument("--optimization-candidate-id",
-                        help="stable supervisor candidate/checkpoint identifier")
-    parser.add_argument("--optimization-integration-target",
-                        help="saved mainline integration target E for optimization target O")
-    parser.add_argument("--optimization-baseline", type=Path,
-                        help="controller-owned candidate baseline directory for retry/rollback")
-    parser.add_argument("--optimization-verify-only", action="store_true",
-                        help="verify the preserved optimization candidate without planner or executor")
-    parser.add_argument("--optimization-consume-external-sta", action="store_true",
-                        help="consume a previously yielded top-level STA obligation without editing")
-    parser.add_argument("--optimization-expected-rtl-sha256",
-                        help="expected candidate identity; never sufficient by itself to reuse evidence")
-    parser.add_argument("--optimization-functional-proof-rtl-sha256",
-                        help="reuse passing 8/16/48 functional proof bound to this RTL SHA-256")
-    parser.add_argument("--optimization-functional-proof-context-sha256",
-                        help="managed-input fingerprint for the passing functional proof")
-    parser.add_argument("--optimization-preflight-proof-rtl-sha256",
-                        help="reuse passing Yosys preflight proof bound to this RTL SHA-256")
-    parser.add_argument("--optimization-preflight-proof-context-sha256",
-                        help="managed-input fingerprint for the passing Yosys proof")
-    parser.add_argument("--optimization-measurement-partition", action="append", default=[],
-                        help="validated measurement partition for a preserved candidate; repeat as needed")
-    parser.add_argument("--max-rtl-repair-attempts", type=int, default=2,
-                        help="deterministic functional repair attempts before candidate rollback")
     parser.add_argument("--sta-scope-skill", type=Path,
                         default=default_skill_path("rtl-sta-scope", STA_SCOPE_ENV),
                         help=f"RTLskill rtl-sta-scope directory (also configurable via {STA_SCOPE_ENV})")
@@ -1138,17 +790,26 @@ def main() -> int:
                               f"(also configurable via {CLOSURE_GOVERNANCE_ENV})"))
     args = parser.parse_args()
     try:
+        campaign = load_campaign_contract(args.campaign_contract, ROOT)
+    except CampaignContractError as error:
+        parser.error(str(error))
+    try:
         measurement_budget_levels = tuple(sorted({int(value) for value in args.measurement_budget_levels.split(",")}))
     except ValueError:
         parser.error("--measurement-budget-levels must be comma-separated positive integers")
     if (args.quick_seq_len < 1 or args.medium_seq_len < args.quick_seq_len or args.medium_every < 1
             or args.preflight_timeout_seconds < 1 or not measurement_budget_levels
             or any(value < 1 for value in measurement_budget_levels)
-            or args.measurement_default_timeout_seconds not in measurement_budget_levels
-            or args.max_rtl_repair_attempts < 1):
+            or args.measurement_default_timeout_seconds not in measurement_budget_levels):
         parser.error("invalid sequence-length policy")
+    verification_level = str(campaign["verification_level"])
+    ceiling = campaign.get("measurement_budget_ceiling_seconds")
+    if verification_level in {"sta_targeted", "sta_full"}:
+        if ceiling not in measurement_budget_levels:
+            parser.error("campaign measurement ceiling is not in the configured budget ladder")
+        measurement_budget_levels = tuple(
+            value for value in measurement_budget_levels if value <= int(ceiling))
     MEASUREMENT_BUDGET_CEILING_SECONDS = max(measurement_budget_levels)
-    optimization_rtl_path = None
     sta_scope_root = args.sta_scope_skill.expanduser()
     if not sta_scope_root.is_absolute():
         sta_scope_root = ROOT / sta_scope_root
@@ -1162,33 +823,6 @@ def main() -> int:
     if not (closure_root / "closure_gate.py").is_file():
         parser.error(f"rtl-closure-governance closure_gate.py not found: {closure_root / 'closure_gate.py'}")
     CLOSURE_GOVERNANCE_ROOT = closure_root
-    if args.optimization_module:
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", args.optimization_module):
-            parser.error("--optimization-module must be one valid module name")
-        if not args.optimization_candidate_id:
-            parser.error("--optimization-module requires --optimization-candidate-id")
-        if (args.optimization_integration_target is not None
-                and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", args.optimization_integration_target)):
-            parser.error("--optimization-integration-target must be one valid module name")
-        optimization_rtl_path = rtl_file_for_module(args.optimization_module)
-        if optimization_rtl_path is None:
-            parser.error("optimization module must resolve to exactly one rtl/*.v or rtl/*.sv source")
-    if args.optimization_verify_only and not args.optimization_module:
-        parser.error("--optimization-verify-only requires --optimization-module")
-    if args.optimization_consume_external_sta and not args.optimization_verify_only:
-        parser.error("--optimization-consume-external-sta requires --optimization-verify-only")
-    for option_name, digest in (
-            ("--optimization-expected-rtl-sha256", args.optimization_expected_rtl_sha256),
-            ("--optimization-functional-proof-rtl-sha256",
-             args.optimization_functional_proof_rtl_sha256),
-            ("--optimization-functional-proof-context-sha256",
-             args.optimization_functional_proof_context_sha256),
-            ("--optimization-preflight-proof-rtl-sha256",
-             args.optimization_preflight_proof_rtl_sha256),
-            ("--optimization-preflight-proof-context-sha256",
-             args.optimization_preflight_proof_context_sha256)):
-        if digest is not None and not re.fullmatch(r"[0-9a-f]{64}", digest):
-            parser.error(f"{option_name} must be 64 lowercase hex characters")
 
     # A prior local controller may have died while its server-side functional
     # command was still alive.  Take over only after that exact recorded run is
@@ -1210,42 +844,32 @@ def main() -> int:
         return INFRA_UNCERTAIN_EXIT
 
     task = TASK.read_text(encoding="utf-8")
-    try:
-        directive = load_supervisor_directive(args.supervisor_directive)
-    except ValueError as error:
-        parser.error(str(error))
-    if directive:
-        task += "\n\n## 上层 Pro 的本批次策略指令\n\n" + directive
+    task += ("\n\n## 上层 Pro 的不可变 campaign contract\n\n```json\n"
+             + json.dumps(campaign, ensure_ascii=False, indent=2) + "\n```\n")
     valid_partitions = configured_partitions()
     if not valid_partitions:
         parser.error("harness/ppa.toml contains no [[partitions]] entries")
+    requested_partitions = campaign.get("measurement_partitions")
+    requested_partitions = requested_partitions if isinstance(requested_partitions, list) else []
+    if any(partition not in valid_partitions for partition in requested_partitions):
+        parser.error("campaign contains an unavailable Task-02 measurement partition")
 
     if args.forced_blackbox_expansion_module:
         if "top_level_sta" not in valid_partitions:
             parser.error("blackbox expansion requires the top_level_sta partition")
         return forced_blackbox_expansion(args.forced_blackbox_expansion_module, args, measurement_budget_levels)
 
-    optimization_baseline = (args.optimization_baseline.expanduser().resolve()
-                             if args.optimization_baseline else startup_root / "optimization_candidate_baseline")
-    optimization_failures = 0
-    if args.optimization_module:
-        if args.optimization_baseline:
-            if not (optimization_baseline / optimization_rtl_path).is_file():
-                parser.error(f"optimization baseline does not contain {optimization_rtl_path}")
-        else:
-            (optimization_baseline / optimization_rtl_path).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(ROOT / optimization_rtl_path, optimization_baseline / optimization_rtl_path)
-
-    if args.optimization_verify_only:
-        args.sta_scope_skill = sta_scope_root
-        return verify_existing_optimization(
-            args, optimization_rtl_path, optimization_baseline,
-            measurement_budget_levels, valid_partitions)
-
-    if not args.skip_baseline:
+    if not args.skip_baseline and verification_level != "none":
+        baseline_partitions = (requested_partitions
+                               if verification_level == "sta_targeted" else None)
+        baseline_preflight_only = (
+            verification_level not in {"sta_targeted", "sta_full"}
+            or (verification_level == "sta_targeted" and not baseline_partitions))
         baseline_functional, baseline_preflight, baseline_ppa = baseline(
-            args.quick_seq_len, args.preflight_only, args.preflight_timeout_seconds,
-            args.measurement_default_timeout_seconds)
+            args.quick_seq_len, baseline_preflight_only,
+            args.preflight_timeout_seconds,
+            args.measurement_default_timeout_seconds,
+            baseline_partitions)
         if baseline_functional in (INFRA_EXIT, INFRA_UNCERTAIN_EXIT):
             set_stage("infra_failed", "baseline", "functional baseline transport failed or remains uncertain")
             return baseline_functional
@@ -1256,7 +880,7 @@ def main() -> int:
             set_stage("toolchain_repair", "baseline", "functional baseline passed but Yosys preflight or PPA failed")
 
     measurement_candidates, accepted = persisted_measurement_counters()
-    for attempt in range(1, args.max_attempts + 1):
+    for attempt in range(1, int(campaign["max_steps"]) + 1):
         root = ROOT / "runs" / f"agent-02_yosys_ppa--{dt.datetime.now():%Y%m%d-%H%M%S}--attempt{attempt}"
         root.mkdir(parents=True)
         previous = latest_result()
@@ -1293,9 +917,6 @@ def main() -> int:
                             "infrastructure_recovery_exit": functional_recovery_exit,
                             "infrastructure_recovery_log": str((root / "functional_recovery.log").relative_to(ROOT))}
                 functional_rc = functional_recovery_exit
-        functional_repair = functional_rc not in (None, 0, INFRA_EXIT, INFRA_UNCERTAIN_EXIT)
-        preflight_rc = previous.get("preflight_exit")
-        previous_measurement_scope = previous.get("measurement_scope", "UNKNOWN")
         sta_audit_before = latest_sta_closure_audit()
         if closure_governance_unavailable(sta_audit_before):
             result = {"kind": "infrastructure_uncertain", "attempt": attempt, "time": now(),
@@ -1306,34 +927,23 @@ def main() -> int:
             return INFRA_UNCERTAIN_EXIT
         sta_closure_rerun_gate = sta_audit_before.get("measurement_rerun_admissible") is True
         sta_closure_gate = sta_audit_before.get("closure_gate_required") is True
-        top_level_measurement_pending = (
-            functional_rc == 0 and preflight_rc == 0
-            and previous_measurement_scope not in ("UNKNOWN", "TOP_LEVEL_COMPLETE"))
-        toolchain_repair = not functional_repair and functional_rc == 0 and (
-            preflight_rc not in (None, 0)
-            or (preflight_rc == 0 and previous.get("ppa_exit") not in (None, 0)
-                and previous_measurement_scope == "UNKNOWN")
-        )
-        if args.optimization_module:
-            if optimization_failures:
-                mode, allowed, stage = ("RTL 优化候选功能修复",
-                                        optimization_rtl_path.as_posix(), "optimization_functional_repair")
-            else:
-                mode, allowed, stage = ("RTL 优化候选",
-                                        optimization_rtl_path.as_posix(), "optimization_editing")
-        elif functional_repair:
-            mode, allowed, stage = "功能/Verilator 可用性修复", "rtl/", "functional_repair"
-        elif sta_closure_rerun_gate:
-            mode, allowed, stage = "STA 闭合测量预算提升", "harness/ppa.toml、scripts/remote_yosys_round.sh", "closure_measurement_rerun"
-        elif toolchain_repair:
-            mode, allowed, stage = "综合可用性修复", "rtl/、harness/ppa_preflight.ys、harness/ppa_measure.ys、harness/ppa.toml、scripts/remote_yosys_round.sh", "toolchain_repair"
-        elif (sta_audit_before.get("structural_repair_required") is True
-              and "harness" in str(sta_audit_before.get("repair_domain", ""))):
-            mode, allowed, stage = "STA 顶层闭合修复", "harness/ppa_measure.ys、harness/ppa.toml、scripts/remote_yosys_round.sh", "sta_closure_repair"
-        elif top_level_measurement_pending:
-            mode, allowed, stage = "测量完善/端到端收敛", "rtl/、harness/ppa_preflight.ys、harness/ppa_measure.ys、harness/ppa.toml、scripts/remote_yosys_round.sh", "measurement_completion"
-        else:
-            mode, allowed, stage = "PPA 优化", "rtl/", "editing"
+        mode = str(campaign["repair_domain"])
+        mutation_policy = str(campaign["mutation_policy"])
+        allowed_paths = [str(path) for path in campaign["allowed_paths"]]
+        allowed = ", ".join(allowed_paths) if allowed_paths else "只读；禁止修改任何受管输入"
+        stage = "auditing" if mutation_policy == "read_only" else "editing"
+        if (sta_audit_before.get("strategy_change_required") is True
+                or (sta_closure_rerun_gate and mode != "measurement")):
+            result = {
+                "kind": "strategy_revision_required", "attempt": attempt, "time": now(),
+                "mode": mode, "campaign_contract_id": campaign["contract_id"],
+                "sta_closure_audit": sta_audit_before,
+                "reason": "closure_skill_requires_campaign_strategy_revision",
+            }
+            record(root, result)
+            set_stage("strategy_revision_required", attempt,
+                      "Closure evidence crossed the immutable campaign boundary")
+            return 0
 
         # A: review/plan is read-only. Any accidental RTL write is restored.
         before_plan, after_plan = root / "before_plan", root / "after_plan"
@@ -1341,21 +951,21 @@ def main() -> int:
         set_stage("planning", attempt, "read-only AI review of controller-produced results")
         sta_gate_instruction = ""
         if sta_closure_gate:
-            if args.optimization_module:
-                retry_note = (
-                    "上层 controller 已通过 Optimization Skill 与插入硬门授权本次候选编辑；"
-                    "closure 状态只限制闭合结论、预算和重复测量，不得把测量未完成解释成 RTL 失败，"
-                    "也不得撤销当前候选编辑。功能门通过后，必须按实际 diff 的 STA scope 执行验收。")
-            else:
-                retry_note = ("当前属于 timeout/truncation 的测量未完成状态，不是 closure 导出缺陷；"
-                              "同一测量只能提出严格提高合法预算的 increase_budget，不能修改 RTL。"
-                              if sta_closure_rerun_gate else
-                              "当前属于真实闭合/解析/链路修复状态；若 repair_domain 包含 harness，禁止改 RTL。")
+            retry_note = ("当前属于 timeout/truncation 的测量未完成状态，不是 closure 导出缺陷；"
+                          "同一测量只能提出严格提高合法预算的 increase_budget，不能修改 RTL。"
+                          if sta_closure_rerun_gate else
+                          "当前 Closure Skill 硬门仍有效；必须保持 campaign 边界，若所需修复越界则请求 Pro。")
             sta_gate_instruction = ("\n控制器 STA 闭合硬门已开启。当前审计如下；本轮只允许一个能让 phase 状态迁移的假设，"
                                     + retry_note +
                                     " controller 将执行 top_level_sta 单网表 smoke，禁止 full PPA 里程碑。\n```json\n"
                                     + json.dumps(sta_audit_before, ensure_ascii=False, indent=2) + "\n```\n")
-        planner_prompt = f"""你是 Task 02 的只读复盘与规划者。不得修改任何文件，也不得运行命令。\n\n{task}\n\n当前模式：{mode}\n上一轮控制器真实结果：\n```json\n{json.dumps(previous, ensure_ascii=False, indent=2)}\n```\n\n最新功能验证 feedback：\n```text\n{latest_functional_feedback()}\n```\n\n最新 PPA feedback：\n```text\n{latest_ppa_feedback()}\n```{sta_gate_instruction}\n用不超过 8 条中文 bullet 输出，严格按以下顺序：\n1. 上一轮真实结果；\n2. 本轮要解决的问题与根因证据；\n3. 本轮唯一因果假设；\n4. 准备修改的文件、联动边界和必须保持的接口/功能不变量；\n5. 预期验证结果与功能风险。\n\n“一个问题”指一个可验证因果假设，不等于只能修改一个文件。普通局部优化选择 local：只能改一个 RTL 文件；若假设跨模块且确有必要，选择 architecture：可把多个 RTL 文件作为一个原子变更集，但必须列出全部文件和不变量，controller 将强制全量 PPA。\n\n最后必须单独输出以下三行（字段值严格小写）：\n`change_mode: local|architecture`\n`measurement_mode: targeted|full`\n`affected_partitions: 逗号分隔的分区名；full 时写 none`\n只有 local 且确实修改 RTL 时 targeted 才得到多分区 targeted（最多 {MAX_TARGETED_PARTITIONS} 个分区，候选只能是：{', '.join(valid_partitions)}）；连续 {TARGETED_MEASUREMENTS_BEFORE_FULL} 次有效 targeted 后 controller 自动插入一次 full。脚本/测量 harness 改动且无 RTL 改动时，targeted 会按你声明的合法分区跑单网表 smoke（一个分区）或 targeted 分区集（多个分区）；architecture 或字段不合法均自动改为 full。\n\n最后还必须单独输出一行 `measurement_budget_seconds: N`。N 只能是 {', '.join(map(str, measurement_budget_levels))} 之一。measurement_mode=full 时 N 不得低于 {FULL_MEASUREMENT_MIN_BUDGET_SECONDS}、优先 3600（历史上唯一闭环全部已配置分区的档位）；targeted（含脚本 smoke）才允许 180/600 等短档。默认先选 {args.measurement_default_timeout_seconds}；只有日志证明短预算已稳定推进、且更长时间会获得新的可验证证据时，才可升级。7200 仅用于重点模块测量或顶层里程碑验证，不能因“想再等一会”而选。若上一轮测量未完成且 RTL、PPA 脚本、分区或黑盒配置不变，不得选择比上一轮更短的预算；只有实际改了这些测量输入并说明新探针为何更短，才可降档。\n没有真实数字时必须写“未测得”。禁止根据源码猜测面积、时序、频率或吞吐数值。"""
+        budget_instruction = ""
+        if verification_level in {"sta_targeted", "sta_full"}:
+            budget_instruction = (
+                "\n如果本工作包需要 STA，最后另起一行输出 `measurement_budget_seconds: N`。"
+                f"N 只能是 {', '.join(map(str, measurement_budget_levels))} 之一，且不得超过 campaign 上限。"
+                "只有新证据证明更长档位必要时才升级；相同测量输入不得无理由降档。\n")
+        planner_prompt = f"""你是 Task 02 的只读战术规划者。不得修改文件、运行命令、改变 campaign contract，或扩大修复域。\n\n{task}\n\n上一轮控制器真实结果：\n```json\n{json.dumps(previous, ensure_ascii=False, indent=2)}\n```\n\n最新功能验证 feedback：\n```text\n{latest_functional_feedback()}\n```\n\n最新 PPA feedback：\n```text\n{latest_ppa_feedback()}\n```{sta_gate_instruction}\n只为当前 campaign 提出一个有边界的工作包。可以在一个工作包内阅读上下文、实施相关修改并接受契约规定的验证，但不得改变 repair_domain、mutation_policy、verification_level、允许路径或预算上限。\n\n先用不超过 6 条中文 bullet 说明上一轮事实、唯一因果假设、本轮边界和预期证据。最后必须输出一个 fenced JSON，且不能增加字段：\n```json\n{{\n  "kind": "flash_work_package",\n  "disposition": "execute|escalate",\n  "escalation_reason": "execute 时为 none；否则逐字选择 campaign 的一个 escalation_conditions",\n  "access": "read_only|edit",\n  "verification_request": "none|contract",\n  "objective": "本轮有界目标",\n  "hypothesis": "一个可证伪因果假设",\n  "planned_paths": ["准备修改的项目相对文件；只读工作包为空列表"],\n  "expected_evidence": "完成或证伪本轮假设所需的证据"\n}}\n```\nplanned_paths 必须是具体文件，不能写未获授权路径。local 最多一个文件；read_only 必须为空。edit 必须使用 contract 验证；read_only 可以选择 none 或 contract。若完成目标必须越界，disposition 必须为 escalate、access=read_only、verification_request=none 且 planned_paths 必须为空，controller 将停止当前 campaign 并交回 Pro。{budget_instruction}\n没有真实数字时必须写“未测得”。禁止根据源码猜测面积、时序、频率或吞吐数值。"""
         planner_rc = run(omp_command(args.model) + [planner_prompt], root / "planner.log", record_command=False)
         snapshot(after_plan)
         planner_violation = diff(before_plan, after_plan)
@@ -1376,28 +986,73 @@ def main() -> int:
             set_stage("agent_unavailable", attempt,
                       f"planner failed: {planner_failure}; executor and verification intentionally skipped")
             return planner_rc or 1
-
-        planned_change_mode, planned_measurement_mode, planned_partitions, planned_measurement_source = \
-            planning_policy_from_reply(tail(root / "planner.log"), valid_partitions)
+        if planner_violation:
+            result = {
+                "kind": "contract_violation", "attempt": attempt, "time": now(),
+                "campaign_contract_id": campaign["contract_id"],
+                "reason": "planner_modified_managed_inputs",
+                "planner_log": str((root / "planner.log").relative_to(ROOT)),
+            }
+            record(root, result, planner=tail(root / "planner.log"))
+            set_stage("contract_violation", attempt,
+                      "read-only planner modified managed inputs; changes restored")
+            return 1
+        try:
+            work_package = parse_work_package(tail(root / "planner.log"), campaign)
+        except CampaignContractError as error:
+            result = {
+                "kind": "contract_violation", "attempt": attempt, "time": now(),
+                "campaign_contract_id": campaign["contract_id"],
+                "reason": "invalid_flash_work_package", "detail": str(error),
+                "planner_log": str((root / "planner.log").relative_to(ROOT)),
+            }
+            record(root, result, planner=tail(root / "planner.log"))
+            set_stage("contract_violation", attempt, str(error))
+            return 1
+        (root / "work_package.json").write_text(
+            json.dumps(work_package, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        if work_package.get("disposition") == "escalate":
+            result = {
+                "kind": "strategy_revision_required", "attempt": attempt, "time": now(),
+                "mode": mode, "campaign_contract_id": campaign["contract_id"],
+                "reason": work_package.get("escalation_reason"),
+                "work_package": work_package,
+                "planner_log": str((root / "planner.log").relative_to(ROOT)),
+            }
+            record(root, result, planner=tail(root / "planner.log"))
+            set_stage("strategy_revision_required", attempt,
+                      str(work_package.get("escalation_reason")))
+            return 0
+        step_read_only = work_package.get("access") == "read_only"
+        step_verification_level = (
+            verification_level
+            if work_package.get("verification_request") == "contract" else "none")
 
         # B: controller, not AI, owns every command. Toolchain repair has a deliberately small extra allow-list.
         before_edit, after_edit = root / "before_edit", root / "after_edit"
         snapshot(before_edit)
-        set_stage(stage, attempt, "AI may edit only the controller allow-list; verification has not started")
-        executor_prompt = f"""你是 Task 02 实施者。不得运行任何命令。\n\n{task}\n\n当前模式：{mode}\n本轮允许修改：{allowed}\n控制器已接受的变更类型：{planned_change_mode}；PPA 策略：{planned_measurement_mode}（{', '.join(planned_partitions) if planned_partitions else '全部分区'}）。\n本轮规划：\n{tail(root / 'planner.log')}\n\n只实施这一个因果假设，且不得修改允许范围之外的文件。local 模式至多修改一个 RTL 文件；architecture 模式的多文件变更必须是同一原子假设，不能顺手重构。只输出不超过 4 条中文 bullet：修改文件、具体改动、为何能解决本轮问题、功能风险。不要预测 PPA 数字。"""
-        executor_rc = run(omp_command(args.model) + [executor_prompt], root / "executor.log", record_command=False)
+        set_stage("auditing" if step_read_only else stage, attempt,
+                  "executing one validated work package inside the immutable campaign")
+        if step_read_only:
+            executor_rc = 0
+            (root / "executor.log").write_text(
+                "read_only campaign: planner work package is the completed audit; executor was not invoked\n",
+                encoding="utf-8")
+        else:
+            executor_prompt = f"""你是 Task 02 实施者。不得运行任何命令，也不得改变 campaign contract。\n\n{task}\n\n本轮允许修改：{allowed}\n本轮已校验工作包：\n```json\n{json.dumps(work_package, ensure_ascii=False, indent=2)}\n```\n\n只实施该工作包。实际修改必须是 planned_paths 的子集；不得顺手修改其他文件、扩大修复域或切换架构层级。可以在这些文件内完成实现所需的相关修改。只输出不超过 4 条中文 bullet：实际修改、与假设的关系、保留的不变量和风险。不要预测 PPA 数字。"""
+            executor_rc = run(omp_command(args.model) + [executor_prompt], root / "executor.log", record_command=False)
         snapshot(after_edit)
         changes = diff(before_edit, after_edit)
         changed_paths = changed_relative_paths(before_edit, after_edit)
         rtl_changed_paths, requires_full_regression = regression_requirements(changed_paths)
         non_rtl_changed_paths = [path.as_posix() for path in changed_paths
                                  if path.parts and path.parts[0] != "rtl"]
-        # An architecture experiment is inherently a cross-module risk even
+        # An architecture campaign is inherently a cross-module risk even
         # when filenames do not hit the conservative data-path keyword list.
         # It therefore always gets prompt-0/48 before its full PPA result can
         # become evidence for the next edit.
         requires_full_regression = requires_full_regression or (
-            planned_change_mode == "architecture" and bool(rtl_changed_paths))
+            mutation_policy == "architecture" and bool(rtl_changed_paths))
         (root / "changes.diff").write_text(changes, encoding="utf-8")
         executor_failure = agent_failure_reason(root / "executor.log", executor_rc)
         if executor_failure:
@@ -1420,46 +1075,43 @@ def main() -> int:
                       f"executor failed: {executor_failure}; partial changes restored; verification intentionally skipped")
             return executor_rc or 1
 
-        if args.optimization_module:
-            unexpected = [path.as_posix() for path in changed_paths if path != optimization_rtl_path]
-            if unexpected:
-                restore_one(optimization_baseline, optimization_rtl_path)
-                result = {"kind": "policy_violation", "attempt": attempt, "time": now(),
-                          "optimization_candidate_id": args.optimization_candidate_id,
-                          "optimization_module": args.optimization_module,
-                          "optimization_integration_target": args.optimization_integration_target,
-                          "optimization_status": "rolled_back",
-                          "mainline_resume": True, "unexpected_paths": unexpected,
-                          "note": "优化候选越过单模块文件边界；controller 已恢复候选基线",
-                          "planner_log": str((root / "planner.log").relative_to(ROOT)),
-                          "executor_log": str((root / "executor.log").relative_to(ROOT)),
-                          "changes": str((root / "changes.diff").relative_to(ROOT))}
-                record(root, result, changes, tail(root / "planner.log"), tail(root / "executor.log"))
-                set_stage("optimization_rolled_back", attempt, "candidate edited paths outside its hard scope")
-                return 0
-
-        # A local hypothesis is deliberately narrow, but an architecture
-        # hypothesis may be a coherent multi-file atomic edit.  Enforce the
-        # distinction after the actual diff rather than trusting prose.
-        if planned_change_mode == "local" and len(rtl_changed_paths) > 1:
+        contract_error = actual_changes_error(
+            [path.as_posix() for path in changed_paths], work_package, campaign)
+        if contract_error is not None:
             restore(before_edit)
-            result = {"kind": "policy_violation", "attempt": attempt, "time": now(),
+            result = {"kind": "contract_violation", "attempt": attempt, "time": now(),
                       "planner_exit": planner_rc, "executor_exit": executor_rc,
                       "rtl_changed_paths": rtl_changed_paths,
-                      "note": "local 模式实际修改了多个 RTL 文件；已回退，必须由 planner 明确选择 architecture 原子实验后重试",
+                      "campaign_contract_id": campaign["contract_id"],
+                      "work_package": work_package, "reason": contract_error,
+                      "note": "实际 diff 超出已批准工作包；改动已回退，当前 campaign 停止",
                       "planner_log": str((root / "planner.log").relative_to(ROOT)),
                       "executor_log": str((root / "executor.log").relative_to(ROOT)),
                       "changes": str((root / "changes.diff").relative_to(ROOT))}
             record(root, result, changes, tail(root / "planner.log"), tail(root / "executor.log"))
-            set_stage("policy_violation", attempt, "local hypothesis edited multiple RTL files; changes restored")
+            set_stage("contract_violation", attempt, contract_error)
             return 1
 
-        # C: every RTL write receives an immediate 16-token gate.  Changes to
-        # control/data-path modules additionally receive prompt-0/48-token
-        # regression before any synthesis result is allowed to influence the
-        # next RTL edit.  PPA-only changes retain the cheaper cadence below.
+        if step_verification_level == "none":
+            result = {
+                "kind": "audit_step", "attempt": attempt, "time": now(),
+                "mode": mode, "campaign_contract_id": campaign["contract_id"],
+                "work_package": work_package, "managed_inputs_changed": bool(changes),
+                "planner_exit": planner_rc, "executor_exit": executor_rc,
+                "planner_log": str((root / "planner.log").relative_to(ROOT)),
+                "executor_log": str((root / "executor.log").relative_to(ROOT)),
+                "changes": str((root / "changes.diff").relative_to(ROOT)),
+                "note": "read-only audit work package completed without project verification",
+            }
+            record(root, result, changes, tail(root / "planner.log"), tail(root / "executor.log"))
+            continue
+
+        # C: the immutable contract selects the verification level. Every RTL
+        # write still receives the mandatory functional gates before synthesis
+        # or STA can become evidence for another tactical step.
         set_stage("functional_quick", attempt, f"seq_len={args.quick_seq_len}")
-        quick_rc = run_with_infra_retry(functional_command(args.quick_seq_len), root / "functional_quick.log")
+        quick_rc = run_with_infra_retry(
+            functional_command(args.quick_seq_len), root / "functional_quick.log")
         preflight_rc, ppa_rc, medium_rc, mandatory_full_rc = None, None, None, None
         counting_requested_seq_len = None
         counting_baseline_cycles = None
@@ -1468,39 +1120,26 @@ def main() -> int:
         measurement_scope = "UNKNOWN"
         new_measurement_candidate = False
         measurement_fingerprint = measurement_config_fingerprint()
-        # Full PPA is the safe default.  Targeted PPA is permitted only for a
-        # real, single-file local RTL hypothesis; every two useful targeted
-        # probes are followed by full configured-partition coverage.  A
-        # script-only change honors the planner's validated partition request
-        # as a single-netlist smoke (one partition) or a targeted set, never a
-        # full repeat.
+        contract_partitions = [str(item) for item in campaign["measurement_partitions"]]
         measurement_plan_mode, measurement_partitions, measurement_plan_source = decide_measurement_plan(
-            planned_change_mode, planned_measurement_mode, planned_partitions, planned_measurement_source,
-            rtl_changed_paths, non_rtl_changed_paths, args.force_full_measurement,
-            targeted_measurements_since_full(), sta_closure_gate)
+            step_verification_level, contract_partitions, rtl_changed_paths,
+            non_rtl_changed_paths, sta_closure_gate)
         sta_scope_gate = None
-        if rtl_changed_paths:
-            context_hints = [args.optimization_module] if args.optimization_module else []
+        if rtl_changed_paths and step_verification_level in {"sta_targeted", "sta_full"}:
             current_context = design_context_slice(
-                ROOT, rtl_paths=rtl_changed_paths, module_hints=context_hints)
+                ROOT, rtl_paths=rtl_changed_paths, module_hints=[])
             context_modules = list((current_context.get("module_contexts") or {}).keys())
             affected_modules = (context_modules if len(context_modules) == len(rtl_changed_paths)
                                 else None)
             scope_packet = conservative_rtl_change_packet(
-                changes, rtl_changed_paths, change_mode=planned_change_mode,
+                changes, rtl_changed_paths, change_mode=mutation_policy,
                 remaining_blackboxes=configured_top_level_blackboxes(),
                 affected_modules=affected_modules, design_context=current_context)
             try:
                 sta_scope_gate = sta_scope_decision(sta_scope_root, scope_packet)
             except SkillGateError as error:
-                if args.optimization_module:
-                    restore_one(optimization_baseline, optimization_rtl_path)
-                else:
-                    restore(before_edit)
+                restore(before_edit)
                 result = {"kind": "infrastructure_uncertain", "attempt": attempt, "time": now(),
-                          "optimization_candidate_id": args.optimization_candidate_id,
-                          "optimization_module": args.optimization_module,
-                          "optimization_status": "preserved_infra_uncertain" if args.optimization_module else None,
                           "sta_scope_gate_error": str(error),
                           "note": "rtl-sta-scope gate 不可用；未启动 STA，当前改动已恢复到安全基线"}
                 record(root, result, changes, tail(root / "planner.log"), tail(root / "executor.log"))
@@ -1520,9 +1159,31 @@ def main() -> int:
                 selected = [name for name in sta_scope_gate.get("affected_modules", []) if name in valid_partitions]
                 measurement_plan_mode, measurement_partitions = ("targeted", selected or ["top_level_sta"])
             measurement_plan_source = "rtl-sta-scope"
+            if (step_verification_level == "sta_targeted"
+                    and (measurement_plan_mode not in {"targeted", "smoke"}
+                         or not measurement_partitions)):
+                restore(before_edit)
+                result = {
+                    "kind": "strategy_revision_required", "attempt": attempt,
+                    "time": now(), "campaign_contract_id": campaign["contract_id"],
+                    "reason": "verification_scope_change_required",
+                    "sta_scope_gate": sta_scope_gate,
+                    "note": (
+                        "rtl-sta-scope did not produce a legal targeted partition; "
+                        "the controller refused to widen the campaign to full STA"),
+                }
+                record(root, result, changes, tail(root / "planner.log"),
+                       tail(root / "executor.log"))
+                set_stage("strategy_revision_required", attempt,
+                          "targeted STA scope unavailable inside the immutable campaign")
+                return 0
+        measurement_budget = None
+        measurement_budget_source = "not_requested_by_campaign"
         if measurement_plan_mode == "functional_counting":
             measurement_budget, measurement_budget_source = None, "controller_functional_counting_point"
-        elif sta_closure_gate and not args.optimization_module:
+        elif measurement_plan_mode in {"preflight_only", "none"}:
+            measurement_budget, measurement_budget_source = None, "not_requested_by_campaign"
+        elif sta_closure_gate:
             # The closure partition maps the whole control-plane closure; a smoke
             # must carry its declared timeout_s (not a hardcoded 600 s) or the
             # round caps the partition below its window (Round-87 evidence: 09-15
@@ -1535,15 +1196,17 @@ def main() -> int:
                      if isinstance(previous_budget, int) and value > previous_budget])
                 if not larger_budgets:
                     result = {
-                        "kind": "closure_measurement_blocked", "attempt": attempt,
+                        "kind": "strategy_revision_required", "attempt": attempt,
                         "time": now(), "sta_closure_audit": sta_audit_before,
-                        "note": "Closure Skill admitted a rerun but no strictly larger configured budget exists",
+                        "campaign_contract_id": campaign["contract_id"],
+                        "reason": "campaign_budget_ceiling_blocks_closure_rerun",
+                        "note": "Closure Skill admitted a rerun but the campaign has no larger permitted budget",
                     }
                     record(root, result, changes, tail(root / "planner.log"),
                            tail(root / "executor.log"))
-                    set_stage("infra_uncertain", attempt,
-                              "closure rerun contract conflicts with configured budget ladder")
-                    return INFRA_UNCERTAIN_EXIT
+                    set_stage("strategy_revision_required", attempt,
+                              "closure rerun exceeds the immutable campaign ceiling")
+                    return 0
                 minimum_budget = max(minimum_budget, larger_budgets[0])
                 measurement_budget, measurement_budget_source = measurement_budget_from_plan(
                     tail(root / "planner.log"), measurement_budget_levels,
@@ -1553,9 +1216,27 @@ def main() -> int:
                 measurement_budget = minimum_budget
                 measurement_budget_source = "controller_sta_closure_gate"
         else:
-            measurement_budget_floor = (FULL_MEASUREMENT_MIN_BUDGET_SECONDS
-                                        if measurement_plan_mode == "full"
-                                        else partition_budget_floor(measurement_partitions, measurement_budget_levels))
+            if measurement_plan_mode == "full":
+                measurement_budget_floor = FULL_MEASUREMENT_MIN_BUDGET_SECONDS
+            else:
+                raw_timeouts = configured_partition_timeouts()
+                required_timeout = max(
+                    (raw_timeouts.get(name, 0) for name in measurement_partitions), default=0)
+                if required_timeout > max(measurement_budget_levels):
+                    result = {
+                        "kind": "strategy_revision_required", "attempt": attempt,
+                        "time": now(), "campaign_contract_id": campaign["contract_id"],
+                        "reason": "campaign_budget_ceiling_below_partition_timeout",
+                        "required_timeout_seconds": required_timeout,
+                        "campaign_ceiling_seconds": max(measurement_budget_levels),
+                    }
+                    record(root, result, changes, tail(root / "planner.log"),
+                           tail(root / "executor.log"))
+                    set_stage("strategy_revision_required", attempt,
+                              "selected partition exceeds the immutable campaign ceiling")
+                    return 0
+                measurement_budget_floor = partition_budget_floor(
+                    measurement_partitions, measurement_budget_levels)
             measurement_budget, measurement_budget_source = measurement_budget_from_plan(
                 tail(root / "planner.log"), measurement_budget_levels, args.measurement_default_timeout_seconds,
                 previous, measurement_fingerprint, minimum=measurement_budget_floor,
@@ -1594,10 +1275,15 @@ def main() -> int:
                           "mandatory prompt=0 48-token regression after control/data-path RTL edit")
                 mandatory_full_rc = run_with_infra_retry(full_functional_command(), root / "functional_full.log")
                 functional_gate_rc = mandatory_full_rc
-            if functional_gate_rc == 0 and measurement_plan_mode != "functional_counting":
+            needs_preflight = step_verification_level in {
+                "functional_preflight", "sta_targeted", "sta_full"}
+            needs_sta = step_verification_level in {"sta_targeted", "sta_full"}
+            if functional_gate_rc == 0 and needs_preflight \
+                    and measurement_plan_mode != "functional_counting":
                 set_stage("synthesis_preflight", attempt, f"Yosys lowering gate; timeout={args.preflight_timeout_seconds}s")
                 preflight_rc = run(preflight_command(args.preflight_timeout_seconds), root / "preflight.log")
-            if functional_gate_rc == 0 and preflight_rc == 0 and not args.preflight_only and measurement_plan_mode != "functional_counting":
+            if (functional_gate_rc == 0 and preflight_rc == 0 and needs_sta
+                    and measurement_plan_mode != "functional_counting"):
                 selection = ",".join(measurement_partitions) if measurement_partitions else "all"
                 set_stage("ppa", attempt, f"Yosys/ABC {measurement_plan_mode}; partitions={selection}; timeout={measurement_budget}s; source={measurement_budget_source}")
                 ppa_rc = run(measurement_command(measurement_budget, measurement_partitions), root / "ppa.log")
@@ -1626,12 +1312,6 @@ def main() -> int:
             set_stage("infra_uncertain", attempt, "rtl-closure-governance unavailable after measurement")
             return INFRA_UNCERTAIN_EXIT
 
-        optimization_status = None
-        mainline_resume = False
-        optimization_top_scope = bool(
-            args.optimization_module
-            and isinstance(sta_scope_gate, dict)
-            and sta_scope_gate.get("scope") in ("top_level_partial", "top_level_complete"))
         normalized_outcome = Task02ProjectAdapter.normalize_measurement_outcome(
             results=[{
                 "kind": "iteration", "planner_exit": planner_rc,
@@ -1643,33 +1323,8 @@ def main() -> int:
                 "preflight_exit": preflight_rc, "ppa_exit": ppa_rc,
             }],
             process_exit=0, closure_audit=sta_audit_after,
-            preflight_only=args.preflight_only,
-            require_timing=optimization_top_scope)
+            preflight_only=step_verification_level in {"functional", "functional_preflight"})
         outcome_status = str(normalized_outcome.get("status") or "")
-        if args.optimization_module:
-            if outcome_status == "functional_failed":
-                optimization_failures += 1
-                repair_attempts = max(0, optimization_failures - 1)
-                if repair_attempts >= args.max_rtl_repair_attempts or attempt >= args.max_attempts:
-                    restore_one(optimization_baseline, optimization_rtl_path)
-                    optimization_status, mainline_resume = "rolled_back", True
-                else:
-                    optimization_status = "functional_repair_required"
-            elif outcome_status == "measurement_incomplete":
-                optimization_status = "measurement_incomplete"
-            elif outcome_status in {"measurement_not_run", "verification_evidence_missing"}:
-                optimization_status = "external_verification_required"
-            elif outcome_status == "complete":
-                optimization_status, mainline_resume = "accepted", True
-            elif outcome_status in {
-                    "preflight_failed", "execution_failed", "measurement_failed"}:
-                restore_one(optimization_baseline, optimization_rtl_path)
-                optimization_status, mainline_resume = "rolled_back", True
-            elif outcome_status in {"infra_failed", "infra_uncertain"}:
-                optimization_status = "preserved_infra_uncertain"
-            elif not changes:
-                restore_one(optimization_baseline, optimization_rtl_path)
-                optimization_status, mainline_resume = "rolled_back_no_change", True
 
         result = {"kind": "iteration", "attempt": attempt, "time": now(), "planner_exit": planner_rc,
                   "planner_modified_managed_inputs": bool(planner_violation), "executor_exit": executor_rc,
@@ -1684,15 +1339,12 @@ def main() -> int:
                   "sta_closure_audit_before": sta_audit_before,
                   "sta_closure_audit": sta_audit_after,
                   "measurement_timeout_seconds": measurement_budget, "measurement_budget_source": measurement_budget_source,
-                  "change_mode": planned_change_mode, "measurement_plan_mode": measurement_plan_mode,
+                  "change_mode": mutation_policy, "measurement_plan_mode": measurement_plan_mode,
                   "measurement_partitions": measurement_partitions, "measurement_plan_source": measurement_plan_source,
+                  "campaign_contract_id": campaign["contract_id"],
+                  "campaign_operation_id": campaign["operation_id"],
+                  "work_package": work_package,
                   "sta_scope_gate": sta_scope_gate,
-                  "optimization_candidate_id": args.optimization_candidate_id,
-                  "optimization_module": args.optimization_module,
-                  "optimization_integration_target": args.optimization_integration_target,
-                  "optimization_status": optimization_status,
-                  "optimization_repair_attempts": max(0, optimization_failures - 1) if args.optimization_module else None,
-                  "mainline_resume": mainline_resume,
                   "measurement_fingerprint": measurement_fingerprint,
                   "measurement_candidates": measurement_candidates, "accepted_measurements": accepted,
                   "medium_seq_len": args.medium_seq_len if medium_rc is not None else None, "functional_medium_exit": medium_rc,
@@ -1710,53 +1362,8 @@ def main() -> int:
             set_stage("infra_uncertain" if uncertain else "infra_failed", attempt,
                       "remote status uncertain or transport retries failed; RTL was not classified as failing")
             return INFRA_UNCERTAIN_EXIT if uncertain else INFRA_EXIT
-        if args.optimization_module:
-            if optimization_status in ("rolled_back", "rolled_back_no_change", "accepted"):
-                set_stage("optimization_complete", attempt,
-                          f"candidate={args.optimization_module}; status={optimization_status}; resume mainline")
-                return 0
-            if optimization_status == "measurement_incomplete":
-                set_stage("measurement_incomplete", attempt,
-                          f"candidate={args.optimization_module}; measurement timeout; candidate preserved")
-                return MEASUREMENT_TIMEOUT_EXIT
 
-    if args.final_regression:
-        final_root = ROOT / "runs" / f"agent-02_yosys_ppa--{dt.datetime.now():%Y%m%d-%H%M%S}--final"
-        final_root.mkdir(parents=True)
-        set_stage("functional_full", "final", "prompt=0 full 48-token regression")
-        final_command = ["bash", "scripts/remote_task02_functional.sh", "--prompt", "0", "--seq-len", "48"]
-        final_log = final_root / "functional_full.log"
-        final_launch_error = None
-        try:
-            final_rc = run_with_infra_retry(final_command, final_log)
-        except (OSError, subprocess.SubprocessError) as error:
-            final_rc = INFRA_EXIT
-            final_launch_error = f"could not launch final regression: {type(error).__name__}: {error}"
-            with final_log.open("a", encoding="utf-8") as handle:
-                handle.write(f"\n[controller launch error] {final_launch_error}\n")
-        (final_root / "final_regression.json").write_text(
-            json.dumps({
-                "kind": "final_regression",
-                "time": now(),
-                "exit": final_rc,
-                "command": final_command,
-                "log": str(final_log.relative_to(ROOT)),
-                "launch_error": final_launch_error,
-            }, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        if final_rc:
-            if final_rc == INFRA_UNCERTAIN_EXIT:
-                stage = "infra_uncertain"
-            elif final_rc == INFRA_EXIT:
-                stage = "infra_failed"
-            else:
-                stage = "failed"
-            detail = (final_launch_error if final_launch_error else
-                      f"48-token regression failed; exit={final_rc}; log={final_log.relative_to(ROOT)}")
-            set_stage(stage, "final", detail)
-            return final_rc
-    set_stage("complete", args.max_attempts, "controller completed")
+    set_stage("complete", campaign["max_steps"], "immutable Flash campaign completed")
     return 0
 
 

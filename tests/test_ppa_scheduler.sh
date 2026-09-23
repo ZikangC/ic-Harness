@@ -5,6 +5,16 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ppa-scheduler-test.XXXXXX")
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
+python3 "$ROOT/harness/ppa_agent_loop.py" --help >"$TMP_ROOT/ppa-help.log"
+if grep -F -- '--optimization-' "$TMP_ROOT/ppa-help.log" >/dev/null; then
+  printf '%s\n' 'Flash controller still exposes an Optimization entry' >&2
+  exit 1
+fi
+python3 "$ROOT/harness/task02_optimization_executor.py" --help \
+  >"$TMP_ROOT/optimization-executor-help.log"
+grep -F -- 'functional_preflight' "$TMP_ROOT/optimization-executor-help.log" >/dev/null
+grep -F -- 'measure_candidate' "$TMP_ROOT/optimization-executor-help.log" >/dev/null
+
 printf '%s\n' \
   'HARNESS_PARTITION_BEGIN=control' \
   '2 memories' \
@@ -47,12 +57,15 @@ printf '{"measurement_candidates": 2, "accepted_measurements": 0}\n' > "$TMP_ROO
 touch -t 202601010101 "$TMP_ROOT/runs/agent-02_yosys_ppa--old/result.json"
 touch -t 202601010102 "$TMP_ROOT/runs/agent-02_yosys_ppa--new/result.json"
 python3 - "$ROOT" "$TMP_ROOT" <<'PY'
-import os
 import sys
+import hashlib
+import json
 from pathlib import Path
 
 sys.path.insert(0, str(Path(sys.argv[1]) / "harness"))
 import ppa_agent_loop
+from flash_campaign_contract import (REQUIRED_ESCALATIONS, actual_changes_error,
+                                     parse_work_package, validate_campaign_contract)
 from rtl_skill_bridge import (CLOSURE_GOVERNANCE_ENV, closure_governance_audit,
                               default_skill_path)
 
@@ -114,58 +127,75 @@ assert paths == ["rtl/small_constant_pkg.sv"] and not full
 paths, full = ppa_agent_loop.regression_requirements([Path("harness/ppa_measure.ys")])
 assert paths == [] and not full
 
-valid = ["p16_tensor_loader", "mla_attention_head", "cp_fsm"]
-assert ppa_agent_loop.planning_policy_from_reply(
-    "change_mode: local\nmeasurement_mode: targeted\naffected_partitions: p16_tensor_loader\n", valid) == \
-    ("local", "targeted", ["p16_tensor_loader"], "planner_targeted_request")
-assert ppa_agent_loop.planning_policy_from_reply(
-    "change_mode: architecture\nmeasurement_mode: targeted\naffected_partitions: cp_fsm\n", valid) == \
-    ("architecture", "full", [], "controller_architecture_requires_full")
-assert ppa_agent_loop.planning_policy_from_reply(
-    "change_mode: local\nmeasurement_mode: targeted\naffected_partitions: invented\n", valid) == \
-    ("local", "full", [], "controller_invalid_targeted_partition_request")
-assert ppa_agent_loop.planning_policy_from_reply(
-    "`change_mode: local`\n`measurement_mode: full`\n`affected_partitions: none`\n", valid) == \
-    ("local", "full", [], "planner_full_or_default")
-assert ppa_agent_loop.planning_policy_from_reply(
-    "`change_mode: local`\n`measurement_mode: targeted`\n`affected_partitions: p16_tensor_loader`\n", valid) == \
-    ("local", "targeted", ["p16_tensor_loader"], "planner_targeted_request")
 assert ppa_agent_loop.decide_measurement_plan(
-    "local", "targeted", ["p16_tensor_loader"], "planner_targeted_request",
-    ["rtl/foo.sv"], [], False, 0) == \
-    ("targeted", ["p16_tensor_loader"], "planner_targeted_request")
+    "sta_targeted", ["p16_tensor_loader"], ["rtl/foo.sv"], []) == \
+    ("targeted", ["p16_tensor_loader"], "pro_campaign_contract")
 assert ppa_agent_loop.decide_measurement_plan(
-    "local", "targeted", ["p16_tensor_loader"], "planner_targeted_request",
-    ["rtl/foo.sv"], [], False, 2) == \
-    ("full", [], "controller_periodic_full_after_targeted")
+    "sta_targeted", ["p16_tensor_loader"], ["rtl/foo.sv", "rtl/bar.sv"], []) == \
+    ("targeted", ["p16_tensor_loader"], "pro_campaign_contract")
 assert ppa_agent_loop.decide_measurement_plan(
-    "local", "targeted", ["cp_fsm"], "planner_targeted_request",
-    [], ["harness/ppa_measure.ys"], False, 0) == \
-    ("smoke", ["cp_fsm"], "planner_targeted_request")
+    "sta_targeted", ["cp_fsm"], [], ["harness/ppa_measure.ys"]) == \
+    ("smoke", ["cp_fsm"], "pro_campaign_contract")
 assert ppa_agent_loop.decide_measurement_plan(
-    "local", "targeted", ["mla_attention_head", "cp_fsm"], "planner_targeted_request",
-    [], ["harness/ppa_measure.ys"], False, 0) == \
-    ("targeted", ["mla_attention_head", "cp_fsm"], "planner_targeted_request")
+    "sta_targeted", ["mla_attention_head", "cp_fsm"], [],
+    ["harness/ppa_measure.ys"]) == \
+    ("targeted", ["mla_attention_head", "cp_fsm"], "pro_campaign_contract")
 assert ppa_agent_loop.decide_measurement_plan(
-    "local", "targeted", ["p16_tensor_loader"], "planner_targeted_request",
-    [], [], False, 0) == \
-    ("targeted", ["p16_tensor_loader"], "planner_targeted_request")
+    "sta_targeted", ["p16_tensor_loader"], [], []) == \
+    ("targeted", ["p16_tensor_loader"], "pro_campaign_contract")
 assert ppa_agent_loop.decide_measurement_plan(
-    "local", "full", [], "planner_full_or_default",
-    [], [], False, 0) == \
-    ("functional_counting", [], "controller_functional_counting_point")
+    "functional", [], [], []) == \
+    ("functional_counting", [], "pro_campaign_contract")
 assert ppa_agent_loop.decide_measurement_plan(
-    "architecture", "full", [], "controller_architecture_requires_full",
-    [], [], False, 0) == \
-    ("functional_counting", [], "controller_functional_counting_point")
+    "sta_full", [], [], []) == \
+    ("full", [], "pro_campaign_contract")
 assert ppa_agent_loop.decide_measurement_plan(
-    "local", "targeted", ["p16_tensor_loader"], "planner_targeted_request",
-    [], ["harness/ppa_measure.ys"], True, 0) == \
-    ("full", [], "supervisor_forced_full_milestone")
-assert ppa_agent_loop.decide_measurement_plan(
-    "architecture", "full", [], "planner_full_or_default",
-    [], [], True, 99, True) == \
+    "sta_full", [], [], [], True) == \
     ("smoke", ["top_level_sta"], "controller_sta_closure_gate")
+
+contract = {
+    "schema_version": 1, "operation_id": "1" * 64,
+    "objective": "only update one local RTL file", "repair_domain": "rtl_optimization",
+    "mutation_policy": "local", "allowed_paths": ["rtl"],
+    "verification_level": "sta_targeted", "measurement_partitions": [],
+    "measurement_budget_ceiling_seconds": 1800, "max_steps": 2,
+    "escalation_conditions": list(REQUIRED_ESCALATIONS),
+}
+contract["contract_id"] = hashlib.sha256(json.dumps(
+    contract, ensure_ascii=False, sort_keys=True,
+    separators=(",", ":")).encode()).hexdigest()
+contract = validate_campaign_contract(contract)
+package = parse_work_package(
+    '```json\n{"kind":"flash_work_package","objective":"edit foo",'
+    '"disposition":"execute","escalation_reason":"none",'
+    '"access":"edit","verification_request":"contract",'
+    '"hypothesis":"remove redundant mux","planned_paths":["rtl/foo.sv"],'
+    '"expected_evidence":"functional and STA evidence"}\n```', contract)
+assert actual_changes_error(["rtl/foo.sv"], package, contract) is None
+assert actual_changes_error(["rtl/bar.sv"], package, contract) is not None
+audit_package = parse_work_package(
+    '```json\n{"kind":"flash_work_package","disposition":"execute",'
+    '"escalation_reason":"none","access":"read_only",'
+    '"verification_request":"none","objective":"audit prior edit",'
+    '"hypothesis":"the prior diff preserves widths","planned_paths":[],'
+    '"expected_evidence":"a read-only risk report"}\n```', contract)
+assert audit_package["access"] == "read_only"
+escalation = parse_work_package(
+    '```json\n{"kind":"flash_work_package","disposition":"escalate",'
+    '"escalation_reason":"architecture_change_required","objective":"handoff",'
+    '"access":"read_only","verification_request":"none",'
+    '"hypothesis":"local scope is insufficient","planned_paths":[],'
+    '"expected_evidence":"Pro must authorize architecture scope"}\n```', contract)
+assert escalation["disposition"] == "escalate"
+assert not hasattr(ppa_agent_loop, "planning_policy_from_reply")
+assert not hasattr(ppa_agent_loop, "targeted_measurements_since_full")
+ppa_source = (Path(sys.argv[1]) / "harness/ppa_agent_loop.py").read_text(encoding="utf-8")
+for removed_periodic_full_policy in (
+        "TARGETED_MEASUREMENTS_BEFORE_FULL",
+        "controller_periodic_full_after_targeted"):
+    assert removed_periodic_full_policy not in ppa_source
+assert "measurement_command(measurement_budget)" not in ppa_source
+assert 'verification_level == "sta_targeted" and not baseline_partitions' in ppa_source
 
 audit = classify_feedback(
     "sta_status=read_error\nsta_error=STA-0171 unknown blackbox\n"
@@ -203,7 +233,7 @@ assert not timeout_audit["closure_repair_required"]
 assert timeout_audit["measurement_rerun_admissible"] is None
 assert timeout_audit["repair_domain"] == "measurement_budget"
 assert ppa_agent_loop.decide_measurement_plan(
-    "architecture", "full", [], "planner_full_or_default", [], [], False, 99, True) == \
+    "sta_full", [], [], [], True) == \
     ("smoke", ["top_level_sta"], "controller_sta_closure_gate")
 assert ppa_agent_loop.measurement_budget_from_plan(
     "measurement_budget_seconds: 3600\n", (180, 600, 1800, 3600, 7200), 180,
@@ -217,21 +247,6 @@ assert ppa_agent_loop.parse_functional_counting_feedback("no usable numbers here
 assert ppa_agent_loop.functional_counting_marginal(161556, 274906, 8, 16) == 14168.75
 assert ppa_agent_loop.functional_counting_marginal(None, 274906, 8, 16) is None
 assert ppa_agent_loop.functional_counting_marginal(161556, 274906, 8, 8) is None
-
-target1 = Path(sys.argv[2]) / "runs/agent-02_yosys_ppa--target1/result.json"
-target2 = Path(sys.argv[2]) / "runs/agent-02_yosys_ppa--target2/result.json"
-target1.parent.mkdir(parents=True)
-target2.parent.mkdir(parents=True)
-target1.write_text('{"measurement_plan_mode":"targeted", "ppa_exit":0}')
-target2.write_text('{"measurement_plan_mode":"targeted", "ppa_exit":124}')
-os.utime(target1, (100, 100))
-os.utime(target2, (200, 200))
-assert ppa_agent_loop.targeted_measurements_since_full() == 2
-full = Path(sys.argv[2]) / "runs/agent-02_yosys_ppa--full/result.json"
-full.parent.mkdir(parents=True)
-full.write_text('{"measurement_plan_mode":"full", "ppa_exit":0}')
-os.utime(full, (300, 300))
-assert ppa_agent_loop.targeted_measurements_since_full() == 0
 
 ppa_agent_loop.STRATEGY_ARCHIVE.mkdir(parents=True)
 (ppa_agent_loop.STRATEGY_ARCHIVE / "latest_ppa_feedback.txt").write_text("measurement_scope=PARTIAL_HIERARCHICAL\n")

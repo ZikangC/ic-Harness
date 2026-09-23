@@ -279,6 +279,40 @@ def optimization_execute_request(
         runner = resolve_gate(skill_root, "scripts/optimization_runner.py")
         return run_json_gate(
             [sys.executable, str(runner)], runner_request, timeout=timeout)
+    capability_request = materialized.get("capability_request")
+    if isinstance(capability_request, Mapping):
+        capability_ref = str(capability_request.get("capability_ref") or "")
+        packet = capability_request.get("packet")
+        if capability_ref != "rtl.sta_scope" or not isinstance(packet, Mapping):
+            raise SkillGateError("Optimization adapter returned invalid capability request")
+        skill_path = Path(str(context.get("sta_scope_skill") or ""))
+        normalizer = getattr(project_adapter, "normalize_optimization_capability", None)
+        if not callable(normalizer):
+            observation = {
+                "observation_id": hashlib.sha256(json.dumps(
+                    {"operation_id": request.get("operation_id"),
+                     "status": "sta_scope_unavailable"},
+                    ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest(),
+                "operation_id": request.get("operation_id"),
+                "campaign_id": request.get("campaign_id"),
+                "module": request.get("module"),
+                "status": "sta_scope_unavailable",
+                "reason": "project_adapter_has_no_sta_scope_mapping",
+            }
+            return {"status": observation["status"], "observation": observation}
+        try:
+            decision = sta_scope_decision(skill_path, packet)
+        except (SkillGateError, OSError, RuntimeError, ValueError) as error:
+            observation = normalizer(
+                request, unavailable_reason=f"{type(error).__name__}: {error}")
+        else:
+            observation = normalizer(
+                request, decision=decision)
+        if not isinstance(observation, Mapping):
+            raise SkillGateError(
+                "Optimization capability normalization returned no observation")
+        return {"status": observation.get("status"),
+                "observation": dict(observation)}
     command = materialized.get("command")
     if isinstance(command, list) and command:
         if not callable(execute_project_plan):

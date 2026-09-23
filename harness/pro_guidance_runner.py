@@ -13,7 +13,7 @@ from sta_evidence_extract import PPA_RUN_ID_RE
 
 
 MAX_FLASH_ATTEMPTS = 6
-PRO_DECISION_PROMPT_MAX_CHARS = 12000
+PRO_DECISION_PROMPT_MAX_CHARS = 200000
 RUN_EVIDENCE_ACTION = "inspect_run_evidence"
 EXPAND_BLACKBOX_ACTION = "expand_blackbox"
 
@@ -84,8 +84,11 @@ def parse_decision(text: str) -> Dict[str, object]:
         if not isinstance(action, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", action):
             continue
         attempts = value.get("flash_attempts", 0)
-        if not isinstance(attempts, int) or not 0 <= attempts <= MAX_FLASH_ATTEMPTS:
+        if (not isinstance(attempts, int) or isinstance(attempts, bool)
+                or not 0 <= attempts <= MAX_FLASH_ATTEMPTS):
             raise ValueError(f"flash_attempts must be in 0..{MAX_FLASH_ATTEMPTS}")
+        if "flash_directive" in value:
+            raise ValueError("flash_directive was removed; use the immutable campaign fields")
         request = value.get("evidence_request")
         if action == RUN_EVIDENCE_ACTION:
             if not isinstance(request, dict):
@@ -104,9 +107,6 @@ def parse_decision(text: str) -> Dict[str, object]:
                     and not PPA_RUN_ID_RE.fullmatch(request["run_id"])):
                 raise ValueError(
                     "evidence_request run_id must be latest_measured_sta or a Task-02 PPA run")
-        directive = value.get("flash_directive", "")
-        if not isinstance(directive, str) or len(directive) > 12000:
-            raise ValueError("flash_directive must be a string no longer than 12000 characters")
         knowledge = value.get("reusable_knowledge")
         if knowledge not in {"append", "none"}:
             raise ValueError("Pro must declare reusable_knowledge as append or none")
@@ -153,7 +153,6 @@ def build_prompt(decision_packet: Mapping[str, object]) -> str:
   "action": "逐字选择 allowed_actions 的一个键",
   "module": "仅在所选动作 parameter_schema 要求时填写",
   "flash_attempts": 0,
-  "flash_directive": "交给对应 executor 的本批次战略重点",
   "rationale": "真实证据依据",
   "reusable_knowledge": "append|none"
 }}
@@ -161,6 +160,11 @@ def build_prompt(decision_packet: Mapping[str, object]) -> str:
 
 所有参数必须符合所选动作的 `parameter_schema`。`inspect_run_evidence` 还必须提供原有
 `evidence_request` 对象：run_id、artifact=sta.log、selector 和 max_lines。没有该请求时省略字段。
+只有 `campaign_policy.selection=pro` 的 Flash 动作，才在同一个 JSON 对象中额外填写
+`campaign_profile`、`campaign_objective`、`campaign_scope_paths` 和
+`measurement_budget_ceiling_seconds` 四个字段；fixed 或非 Flash 动作必须全部省略。
+campaign_profile 决定修复域、修改权限和验证级别；Flash 只能在该契约内
+逐步提出战术工作包，不能在后续步骤改变 profile 或扩大 campaign_scope_paths。
 指导轮只做身份、动作成员和参数 schema 校验，不会把你的动作改写成另一个动作。"""
     if len(prompt) > PRO_DECISION_PROMPT_MAX_CHARS:
         raise RuntimeError("Pro DecisionPacket exceeded its bounded context budget")

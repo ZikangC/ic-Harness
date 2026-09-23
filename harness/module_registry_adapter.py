@@ -237,12 +237,6 @@ def collect_verification_evidence(project_root: Path) -> tuple[list[dict[str, An
         artifact_hash = _sha_file(path)
         watermark_items.append({"run_id": run_id, "sha256": artifact_hash})
         module = result.get("expanded_module")
-        if (not isinstance(module, str) or not module):
-            scope_gate = result.get("sta_scope_gate")
-            scope_gate = scope_gate if isinstance(scope_gate, dict) else {}
-            if (result.get("optimization_status") == "accepted"
-                    and scope_gate.get("scope") in {"top_level_partial", "top_level_complete"}):
-                module = result.get("optimization_integration_target")
         if not isinstance(module, str) or not module:
             continue
         audit = result.get("sta_closure_audit") if isinstance(result.get("sta_closure_audit"), dict) else {}
@@ -250,9 +244,7 @@ def collect_verification_evidence(project_root: Path) -> tuple[list[dict[str, An
         evidence.append({
             "evidence_id": f"expansion:{run_id}:{artifact_hash[:16]}",
             "module_id": module,
-            "kind": ("optimization_integration_acceptance"
-                     if result.get("optimization_status") == "accepted"
-                     else "expansion_verification"),
+            "kind": "expansion_verification",
             "status": _verification_status(result),
             "run_id": run_id,
             "artifact": path.relative_to(project_root).as_posix(),

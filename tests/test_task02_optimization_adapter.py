@@ -15,9 +15,16 @@ from task02_project_adapter import Task02ProjectAdapter  # noqa: E402
 def main() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         project = Path(temporary)
+        (project / "harness").mkdir()
+        (project / "harness/ppa.toml").write_text(
+            '[[partitions]]\nname = "compute"\ntimeout_s = 180\n'
+            '[[partitions]]\nname = "top_level_sta"\ntimeout_s = 600\n'
+            'blackbox = "later"\n', encoding="utf-8")
         rtl = project / "rtl" / "compute.sv"
         rtl.parent.mkdir()
         rtl.write_text("module compute; endmodule\n", encoding="utf-8")
+        (project / "rtl/filelist.f").write_text(
+            "rtl/compute.sv\n", encoding="utf-8")
         adapter = Task02ProjectAdapter(project_root=project)
         incomplete_audit = {
             "closure_governance_status": "ready",
@@ -90,8 +97,35 @@ def main() -> None:
         assert edit["runner_request"]["integration_target"] == "next"
 
         checkpoint = project / "status/checkpoints/campaign"
+        preimage = checkpoint / "preimage/rtl/compute.sv"
+        preimage.parent.mkdir(parents=True)
+        preimage.write_text("module compute; wire old_value; endmodule\n",
+                            encoding="utf-8")
+        functional = adapter.materialize_optimization_execution(
+            {**common, "executor_ref": "project.verify_optimization",
+             "operation": "functional_preflight", "rtl_ref": "rtl/compute.sv",
+             "checkpoint_ref": checkpoint.as_posix(),
+             "expected_rtl_fingerprint": "a" * 64},
+            optimization_executor=ROOT / "harness/task02_optimization_executor.py")
+        assert functional["command"][functional["command"].index(
+            "--operation") + 1] == "functional_preflight"
+        capability = adapter.materialize_optimization_execution(
+            {**common, "executor_ref": "capability.resolve_sta_scope",
+             "operation": "resolve_sta_scope", "rtl_ref": "rtl/compute.sv",
+             "checkpoint_ref": checkpoint.as_posix(),
+             "expected_rtl_fingerprint": "a" * 64})
+        assert capability["capability_request"]["capability_ref"] == "rtl.sta_scope"
+        local_scope = adapter.normalize_optimization_capability(
+            capability.get("execution", {**common, "rtl_ref": "rtl/compute.sv"}),
+            decision={"scope": "local_module", "reason_codes": []})
+        assert local_scope["status"] == "sta_scope_resolved"
+        assert local_scope["measurement_partitions"] == ["compute"]
+        missing_scope = adapter.normalize_optimization_capability(
+            {**common, "rtl_ref": "rtl/compute.sv"}, unavailable_reason="missing")
+        assert missing_scope["status"] == "sta_scope_unavailable"
         verify = adapter.materialize_optimization_execution(
             {**common, "executor_ref": "project.verify_optimization",
+             "operation": "measure_candidate", "rtl_ref": "rtl/compute.sv",
              "checkpoint_ref": checkpoint.as_posix(),
              "expected_rtl_fingerprint": "a" * 64,
              "functional_evidence": {
@@ -103,18 +137,16 @@ def main() -> None:
                  "verification_context_fingerprint": "b" * 64},
              "measurement_partitions": ["compute"],
              "measurement_timeout_seconds": 1800},
-            directive_path=project / "directive.md",
-            ppa_controller=project / "ppa_agent_loop.py",
-            sta_scope_skill=project / "sta-scope",
-            closure_skill=project / "closure", model="flash",
-            max_repair_attempts=2)
+            optimization_executor=ROOT / "harness/task02_optimization_executor.py")
         command = verify["command"]
-        assert "--optimization-verify-only" in command
-        assert "--optimization-functional-proof-rtl-sha256" in command
-        assert "--optimization-functional-proof-context-sha256" in command
-        assert "--optimization-preflight-proof-rtl-sha256" in command
-        assert "--optimization-preflight-proof-context-sha256" in command
-        assert command[command.index("--optimization-measurement-partition") + 1] == "compute"
+        assert command[command.index("--operation") + 1] == "measure_candidate"
+        assert "--model" not in command
+        assert "--max-rtl-repair-attempts" not in command
+        assert "--functional-proof-rtl-sha256" in command
+        assert "--functional-proof-context-sha256" in command
+        assert "--preflight-proof-rtl-sha256" in command
+        assert "--preflight-proof-context-sha256" in command
+        assert command[command.index("--measurement-partition") + 1] == "compute"
         assert not hasattr(adapter, "materialize_optimization_plan")
         external_plan = adapter.materialize_external_optimization_plan(
             decision={"action": "continue"},
@@ -138,25 +170,25 @@ def main() -> None:
                 },
             },
             directive_path=project / "directive.md",
-            ppa_controller=project / "ppa_agent_loop.py",
-            sta_scope_skill=project / "sta-scope", closure_skill=project / "closure",
-            model="flash", max_repair_attempts=2)
+            optimization_executor=ROOT / "harness/task02_optimization_executor.py")
         assert external_plan is not None and external_plan["kind"] == "external"
-        assert "--optimization-consume-external-sta" in external_plan["command"]
+        assert external_plan["command"][external_plan["command"].index(
+            "--operation") + 1] == "measure_candidate"
+        assert "top_level_sta" in external_plan["command"]
         assert external_plan["execution"]["operation_id"] == "b" * 64
         assert adapter.materialize_external_optimization_plan(
             decision={"action": "continue"},
             decision_packet={"allowed_actions": {"continue": {
                 "executor_ref": "flash.run"}}}, optimization_handoff=None,
             directive_path=project / "directive.md",
-            ppa_controller=project / "ppa_agent_loop.py",
-            sta_scope_skill=project / "sta-scope", closure_skill=project / "closure",
-            model="flash", max_repair_attempts=2) is None
+            optimization_executor=ROOT / "harness/task02_optimization_executor.py") is None
 
         execution = {**common, "executor_ref": "project.verify_optimization",
-                     "rtl_ref": "rtl/compute.sv"}
+                     "operation": "measure_candidate", "rtl_ref": "rtl/compute.sv",
+                     "sta_scope_gate": {"scope": "local_module"},
+                     "measurement_partitions": ["compute"]}
         raw = {
-            "optimization_status": "accepted", "ppa_exit": 0,
+            "verification_status": "measurement_executed", "ppa_exit": 0,
             "ppa_log": "runs/run-a/ppa.log", "time": "run-a",
             "functional_quick_exit": 0, "functional_medium_exit": 0,
             "mandatory_full_exit": 0,
@@ -181,16 +213,14 @@ def main() -> None:
         assert complete["status"] == "measurement_observed"
         assert complete["measurement_artifact_available"] is True
         failed = adapter.normalize_optimization_observation(
-            execution, results=[{**raw, "optimization_status": "verification_failed"}],
+            execution, results=[{**raw, "verification_status": "verification_failed"}],
             process_exit=0)
         assert failed["status"] == "verification_failed"
-        external = adapter.normalize_optimization_observation(
+        identity_mismatch = adapter.normalize_optimization_observation(
             execution, results=[{**raw,
-                "optimization_status": "external_verification_required",
-                "sta_scope_gate": {"scope": "top_level_partial"},
-                "preflight_exit": 0}], process_exit=0)
-        assert external["status"] == "external_verification_required"
-        assert external["preflight_evidence"]["rtl_fingerprint"] is not None
+                "verification_status": "candidate_identity_mismatch"}],
+            process_exit=0)
+        assert identity_mismatch["status"] == "infra_uncertain"
 
         external_execution = {
             **execution, "checkpoint_ref": checkpoint.as_posix(),
@@ -199,13 +229,12 @@ def main() -> None:
             "integration_target": "next",
         }
         external_command = adapter.materialize_external_optimization_sta(
-            external_execution, directive_path=project / "directive.md",
-            ppa_controller=project / "ppa_agent_loop.py",
-            sta_scope_skill=project / "sta-scope", closure_skill=project / "closure",
-            model="flash", max_repair_attempts=2)["command"]
-        assert "--optimization-consume-external-sta" in external_command
+            {**external_execution, "operation": "consume_external_sta_obligation"},
+            directive_path=project / "directive.md",
+            optimization_executor=ROOT / "harness/task02_optimization_executor.py")["command"]
         assert external_command[external_command.index(
-            "--optimization-integration-target") + 1] == "next"
+            "--operation") + 1] == "measure_candidate"
+        assert "top_level_sta" in external_command
         combined = adapter.normalize_external_optimization_observation(
             external_execution,
             {"obligation_id": "sta:one", "required_scope": "top_level_partial"},

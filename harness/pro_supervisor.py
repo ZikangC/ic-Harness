@@ -49,6 +49,7 @@ PENDING_VERIFICATION = ROOT / "status/task02_pending_verification.json"
 OPTIMIZATION_STATE = ROOT / "status/task02_optimization_state.json"
 OPTIMIZATION_OBSERVATION = ROOT / "status/task02_optimization_pending_observation.json"
 PPA_CONTROLLER = ROOT / "harness/ppa_agent_loop.py"
+OPTIMIZATION_EXECUTOR = ROOT / "harness/task02_optimization_executor.py"
 DEFAULT_EVIDENCE_CONTRACT = ROOT / "harness/evidence_contract.json"
 PRO_ACTION_RATIONALE_CHARS = 3200
 READ_ONLY_EVIDENCE_ACTION = "inspect_existing_sta_evidence"
@@ -343,8 +344,9 @@ def latest_result_data() -> Dict[str, object]:
         "measurement_fingerprint", "measurement_budget_source", "measurement_plan_source", "agent_failure_reason",
         "functional_counting_requested_seq_len", "functional_counting_baseline_cycles",
         "functional_counting_cycles", "functional_counting_marginal_cycles_per_token",
-        "optimization_candidate_id", "optimization_module", "optimization_status",
-        "optimization_repair_attempts", "mainline_resume", "sta_scope_gate",
+        "verification_status", "campaign_id", "module", "operation",
+        "campaign_contract_id", "campaign_operation_id", "work_package", "reason",
+        "sta_scope_gate",
         "sta_closure_audit", "sta_closure_audit_before",
     )
     return {field: value.get(field) for field in fields if field in value}
@@ -543,7 +545,8 @@ def record_project_execution(
         new_results: list[Dict[str, object]], attempts: int,
         before_sta_audit: Mapping[str, object],
         project_adapter,
-        apply_pending_flags: bool = False) -> Dict[str, object]:
+        apply_pending_flags: bool = False,
+        account_as_flash: bool = True) -> Dict[str, object]:
     """Apply controller-owned accounting without interpreting domain phases."""
     after_sta_audit = controller_closure_audit(state)
     state["latest_closure_governance_audit"] = after_sta_audit
@@ -566,15 +569,21 @@ def record_project_execution(
         state["pending_no_path_probe"] = False
     state["last_measurement_status"] = str(
         normalized_outcome.get("status") or "not_attempted")
-    if measurement_incomplete:
-        state["measurement_incomplete_batches"] = int(
-            state.get("measurement_incomplete_batches", 0)) + 1
-    batch_number = int(state["flash_batches"]) + 1
-    state["flash_batches"] = batch_number
-    state["flash_attempts"] = int(state["flash_attempts"]) + attempts
     state["ppa_budget_seconds"] = int(state["ppa_budget_seconds"]) + sum(
         int(result.get("measurement_timeout_seconds") or 0)
         for result in new_results if result.get("ppa_exit") is not None)
+    if not account_as_flash:
+        return {
+            "after_sta_audit": after_sta_audit,
+            "normalized_outcome": normalized_outcome,
+            "measurement_incomplete": measurement_incomplete,
+            "batch_number": int(state["flash_batches"]),
+            "outcome": "",
+            "repeat_count": 0,
+        }
+    batch_number = int(state["flash_batches"]) + 1
+    state["flash_batches"] = batch_number
+    state["flash_attempts"] = int(state["flash_attempts"]) + attempts
     outcome_value = latest_result_data()
     outcome = hashlib.sha256(json.dumps(
         outcome_value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
@@ -730,7 +739,8 @@ def request_stop(session: str) -> int:
 def active_local_controllers() -> str:
     """Do not compete with the original project or another supervisor session."""
     result = subprocess.run(
-        ["pgrep", "-af", r"python3 .*harness/(ppa_agent_loop|agent_loop)\.py"],
+        ["pgrep", "-af",
+         r"python3 .*harness/(ppa_agent_loop|agent_loop|task02_optimization_executor)\.py"],
         cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, check=False,
     )
     return result.stdout.strip() if result.returncode == 0 else ""
@@ -873,10 +883,6 @@ def main() -> int:
                         help="sum of controller-requested PPA budgets allowed in one session")
     parser.add_argument("--max-wall-clock-minutes", type=int, default=10080,
                         help="wall-clock cap; checked only at batch boundaries")
-    parser.add_argument("--full-regression-every-batches", type=int, default=3,
-                        help="force prompt-0/48 regression at this Flash-batch cadence")
-    parser.add_argument("--full-ppa-every-batches", type=int, default=3,
-                        help="force full configured-partition PPA at this Flash-batch cadence")
     parser.add_argument("--request-stop", metavar="SESSION", help="write a deferred stop request and exit")
     parser.add_argument("--declare-pending-harness-change", action="store_true",
                         help="record an externally implemented harness change that must receive one smoke before Pro may edit again")
@@ -984,7 +990,7 @@ def main() -> int:
         parser.error("Evidence Model input limits are too small")
     limits = (args.max_cycles, args.max_stagnant_batches, args.max_identical_measurements,
               args.max_flash_attempts_total, args.max_ppa_budget_seconds, args.max_wall_clock_minutes,
-              args.full_regression_every_batches, args.full_ppa_every_batches, args.max_rtl_repair_attempts,
+              args.max_rtl_repair_attempts,
               args.max_optimization_measurement_retries, args.max_optimization_edit_attempts,
               args.max_optimization_steps)
     if any(value < 1 for value in limits):
@@ -1026,7 +1032,6 @@ def main() -> int:
         "flash_batches": 0,
         "flash_attempts": 0,
         "ppa_budget_seconds": 0,
-        "measurement_incomplete_batches": 0,
         "last_measurement_status": "not_attempted",
         "last_continue_evidence": "",
         "last_outcome": "",
@@ -1066,8 +1071,6 @@ def main() -> int:
             "optimization_minimum_value_score": args.optimization_minimum_value_score,
             "optimization_minimum_improvement_ratio": args.optimization_minimum_improvement_ratio,
             "optimization_maximum_regression_ratio": args.optimization_maximum_regression_ratio,
-            "full_regression_every_batches": args.full_regression_every_batches,
-            "full_ppa_every_batches": args.full_ppa_every_batches,
         },
     }
     save_state(session_root, state)
@@ -1129,9 +1132,6 @@ def main() -> int:
                 nonlocal optimization_project_batches
                 if stop_file.exists():
                     return {"boundary": {"kind": "stop_requested"}}
-                if int(state["flash_attempts"]) + 1 > args.max_flash_attempts_total:
-                    return {"boundary": {"kind": "resource_limit",
-                                         "detail": "Flash-attempt budget exhausted"}}
                 optimization_project_batches += 1
                 directive_path = Path(str(plan.get("directive_path") or ""))
                 if not directive_path.is_absolute():
@@ -1140,7 +1140,7 @@ def main() -> int:
                 raw = execute_project_plan_command(
                     plan, directive_path=directive_path,
                     controller_log=(session_root /
-                                    f"optimization_controller_{cycle}_{optimization_project_batches}.log"))
+                                    f"optimization_executor_{cycle}_{optimization_project_batches}.log"))
                 if isinstance(raw.get("boundary"), Mapping):
                     return raw
                 process_exit = int(raw.get("process_exit") or 0)
@@ -1152,7 +1152,8 @@ def main() -> int:
                     state, cycle=cycle, process_exit=process_exit,
                     new_results=new_results, attempts=1,
                     before_sta_audit=current_cycle_closure_audit,
-                    project_adapter=project_adapter)
+                    project_adapter=project_adapter,
+                    account_as_flash=False)
                 after_audit = execution_record["after_sta_audit"]
                 assert isinstance(after_audit, dict)
                 current_cycle_closure_audit = after_audit
@@ -1169,7 +1170,8 @@ def main() -> int:
                     plan=plan, results=new_results, process_exit=process_exit,
                     measurement_incomplete=measurement_incomplete,
                     registry=current_registry,
-                    minimum_value_score=args.optimization_minimum_value_score)
+                    minimum_value_score=args.optimization_minimum_value_score,
+                    closure_audit=after_audit)
                 record = {
                     **dict(raw), "status": observation.get("status"),
                     "observation": observation, "batch": batch_number,
@@ -1202,10 +1204,8 @@ def main() -> int:
                     integration_target=registry_mainline(current_registry).get("target"),
                     directive_path=(session_root /
                                     f"optimization_directive_{cycle}_{request_index}.md"),
-                    ppa_controller=PPA_CONTROLLER,
+                    optimization_executor=OPTIMIZATION_EXECUTOR,
                     sta_scope_skill=sta_scope_root,
-                    closure_skill=closure_root,
-                    max_repair_attempts=args.max_rtl_repair_attempts,
                     model=args.flash_model)
                 internal_optimization_records.append(dict(result))
                 return result
@@ -1226,7 +1226,8 @@ def main() -> int:
                     },
                 }, dispatch_optimization_request,
                 dispatchable_executor_refs={"optimization.edit", "optimization.rollback",
-                                            "project.verify_optimization"},
+                                            "project.verify_optimization",
+                                            "capability.resolve_sta_scope"},
                 max_dispatches=args.max_optimization_steps,
                 state_path=OPTIMIZATION_STATE,
                 observation_path=OPTIMIZATION_OBSERVATION,
@@ -1460,7 +1461,6 @@ def main() -> int:
         (session_root / f"closure_gate_before_{cycle}.json").write_text(
             json.dumps(current_sta_audit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         action = str(decision["action"])
-        sta_closure_gate = current_sta_audit.get("closure_gate_required") is True
         if action == "stop_for_debug" or stop_file.exists():
             write_status(session, "stopped", f"cycle={cycle}; Pro stopped at batch boundary")
             return 0
@@ -1606,30 +1606,41 @@ def main() -> int:
                 save_state(session_root, state)
                 return 2
 
-        directive = session_root / f"flash_directive_{cycle}.md"
+        directive = session_root / f"execution_note_{cycle}.md"
+        campaign_contract_path: Optional[Path] = None
         optimization_plan = project_adapter.materialize_external_optimization_plan(
             decision=decision, decision_packet=decision_packet,
             optimization_handoff=optimization_handoff,
-            directive_path=directive, ppa_controller=PPA_CONTROLLER,
-            sta_scope_skill=sta_scope_root, closure_skill=closure_root,
-            model=args.flash_model,
-            max_repair_attempts=args.max_rtl_repair_attempts)
+            directive_path=directive,
+            optimization_executor=OPTIMIZATION_EXECUTOR)
         if optimization_plan is not None:
-            executor_request = {
-                "flash_directive": str(optimization_plan.get("directive") or
-                                       "只执行当前 Skill 请求；禁止额外编辑。\n"),
-                "flash_attempts": 1,
-            }
+            execution_directive = str(
+                optimization_plan.get("directive") or
+                "只执行当前 Skill 请求；禁止额外编辑。\n")
+            attempts = 0
+            request_record = dict(optimization_plan)
+            request_name = f"optimization_external_sta_request_{cycle}.json"
         else:
             executor_request = project_adapter.materialize_request(
                 decision, decision_packet,
                 pending_verification=state.get("pending_verification"))
-        (session_root / f"executor_request_{cycle}.json").write_text(
-            json.dumps(executor_request, ensure_ascii=False, indent=2) + "\n",
+            campaign_contract = executor_request.get("campaign_contract")
+            if not isinstance(campaign_contract, Mapping):
+                raise ProjectAdapterError("Flash request has no immutable campaign contract")
+            attempts = int(campaign_contract.get("max_steps") or 0)
+            campaign_contract_path = session_root / f"flash_campaign_contract_{cycle}.json"
+            campaign_contract_path.write_text(
+                json.dumps(campaign_contract, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8")
+            execution_directive = (
+                "Flash 只执行已物化的不可变 campaign contract；不得读取此说明作为第二策略入口。\n")
+            request_record = dict(executor_request)
+            request_name = f"executor_request_{cycle}.json"
+        (session_root / request_name).write_text(
+            json.dumps(request_record, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        directive.write_text(str(executor_request["flash_directive"]), encoding="utf-8")
-        attempts = int(executor_request["flash_attempts"])
+        directive.write_text(execution_directive, encoding="utf-8")
         plan_execution = (optimization_plan.get("execution")
                           if isinstance(optimization_plan, Mapping) else {})
         plan_execution = plan_execution if isinstance(plan_execution, Mapping) else {}
@@ -1637,6 +1648,9 @@ def main() -> int:
             "evidence": evidence["fingerprint"],
             "action": action,
             "module": decision.get("module"),
+            "campaign_contract_id": (
+                campaign_contract.get("contract_id")
+                if optimization_plan is None else None),
             "optimization_operation_id": plan_execution.get("operation_id"),
         }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
         if batch_intent == state["last_continue_evidence"]:
@@ -1650,42 +1664,34 @@ def main() -> int:
         state["last_continue_evidence"] = batch_intent
         batch_number = int(state["flash_batches"]) + 1
         pending_expansion = registry_mainline_pending(state)
-        full_regression_due = batch_number % args.full_regression_every_batches == 0 and not isinstance(pending_expansion, dict)
-        # A generic full configured-partition milestone cannot diagnose a
-        # known top-level closure failure; the child controller forces the one
-        # top_level_sta smoke instead.
-        full_ppa_due = (batch_number % args.full_ppa_every_batches == 0 and not sta_closure_gate
-                         and not isinstance(pending_expansion, dict))
         optimization_external_sta_run = optimization_plan is not None
-        if optimization_external_sta_run:
-            full_regression_due = False
-            full_ppa_due = False
         if optimization_plan is not None:
             command = list(optimization_plan["command"])
         else:
+            assert campaign_contract_path is not None
             command = [sys.executable, str(PPA_CONTROLLER), "--skip-baseline",
-                       "--max-attempts", str(attempts), "--model", args.flash_model,
-                       "--supervisor-directive", str(directive),
+                       "--model", args.flash_model,
+                       "--campaign-contract", str(campaign_contract_path),
                        "--closure-governance-skill", closure_root.as_posix()]
         if isinstance(pending_expansion, dict) and not optimization_external_sta_run:
             command += ["--forced-blackbox-expansion-module", str(pending_expansion.get("module", ""))]
-        if full_regression_due:
-            command.append("--final-regression")
-        if full_ppa_due:
-            command.append("--force-full-measurement")
-        write_status(session, "flash_running",
-                     f"cycle={cycle}; attempts={attempts}; full48={full_regression_due}; full_ppa={full_ppa_due}")
-        controller_log = session_root / f"flash_controller_{cycle}.log"
+        execution_label = ("optimization_external_sta"
+                           if optimization_external_sta_run else "flash")
+        write_status(
+            session, f"{execution_label}_running",
+            f"cycle={cycle}; attempts={attempts}")
+        controller_log = session_root / f"{execution_label}_controller_{cycle}.log"
         raw_execution = execute_project_plan_command(
-            {"command": command, "directive": executor_request["flash_directive"]},
+            {"command": command, "directive": execution_directive},
             directive_path=directive, controller_log=controller_log)
         boundary = raw_execution.get("boundary")
         if isinstance(boundary, Mapping):
             write_status(session, "blocked",
-                         "another local harness controller became active before Flash: "
+                         f"another local harness controller became active before {execution_label}: "
                          + str(boundary.get("detail") or "unknown controller"))
             append_pro_progress(
-                PRO_REPORT, session, cycle, "controller 拒绝并发 Flash",
+                PRO_REPORT, session, cycle,
+                f"controller 拒绝并发 {execution_label}",
                 details={"boundary": dict(boundary), "command_not_started": command})
             save_state(session_root, state)
             return 3
@@ -1698,7 +1704,8 @@ def main() -> int:
             state, cycle=cycle, process_exit=flash_rc,
             new_results=new_results, attempts=attempts,
             before_sta_audit=current_sta_audit, project_adapter=project_adapter,
-            apply_pending_flags=True)
+            apply_pending_flags=not optimization_external_sta_run,
+            account_as_flash=not optimization_external_sta_run)
         after_sta_audit = execution_record["after_sta_audit"]
         assert isinstance(after_sta_audit, dict)
         normalized_execution_outcome = execution_record.get("normalized_outcome")
@@ -1722,7 +1729,8 @@ def main() -> int:
                     process_exit=flash_rc,
                     measurement_incomplete=measurement_incomplete,
                     registry=post_registry,
-                    minimum_value_score=args.optimization_minimum_value_score)
+                    minimum_value_score=args.optimization_minimum_value_score,
+                    closure_audit=after_sta_audit)
                 save_optimization_observation(observation)
                 measurement_incomplete = (measurement_incomplete
                                           or observation.get("status") == "measurement_incomplete")
@@ -1735,9 +1743,8 @@ def main() -> int:
             write_status(session, "infra_uncertain", f"module registry post-execution gate unavailable: {error}")
             return INFRA_UNCERTAIN_EXIT
         save_state(session_root, state)
-        (session_root / f"flash_result_{cycle}.json").write_text(
+        (session_root / f"{execution_label}_result_{cycle}.json").write_text(
             json.dumps({"cycle": cycle, "exit": flash_rc, "finished_at": timestamp(),
-                        "full_regression_due": full_regression_due, "full_ppa_due": full_ppa_due,
                         "new_results": len(new_results), "outcome": outcome, "sta_closure_audit": after_sta_audit,
                         "measurement_status": state.get("last_measurement_status", "not_attempted"),
                         "measurement_incomplete": measurement_incomplete,
@@ -1745,9 +1752,10 @@ def main() -> int:
             encoding="utf-8",
         )
         append_pro_progress(
-            PRO_REPORT, session, cycle, "Flash 批次结束",
+            PRO_REPORT, session, cycle,
+            ("Optimization 外部 STA 执行结束"
+             if optimization_external_sta_run else "Flash 批次结束"),
             details={"decision": decision, "flash_exit": flash_rc, "new_results": len(new_results),
-                     "full_regression_due": full_regression_due, "full_ppa_due": full_ppa_due,
                      "latest_result": latest_result_data(),
                      "controller_launch_error": controller_launch_error},
         )

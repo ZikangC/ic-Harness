@@ -79,7 +79,7 @@ supervisor 只调用一次 Skill 的 `run` 接口。Skill 内部完成一次 `pr
 
 ### 可替换项目 adapter
 
-`harness.toml` 的 `[controller].project_adapter` 指向当前项目实现。adapter API v10 要求 `materialize_stage_evidence_execution`、`normalize_stage_evidence_execution`、`materialize_project_execution`、`normalize_project_execution` 和 `normalize_measurement_outcome`；旧的 `evidence_artifact_refs` / `evidence_model_command` 以及 Adapter 内的 `execute` / `reconcile` 入口已删除。通用加载器只校验稳定方法，不读取模块登记簿、Optimization 或 Closure 的内部 schema。当前 `task02_project_adapter:Task02ProjectAdapter` 组合已有 DecisionPacket 逻辑并读取本项目黑盒配置；实际单次配置修改由无循环、无模型、无战略判断的 `task02_project_executor.py` 完成。新的相似项目可以替换 Adapter 与该执行器，而无需修改 supervisor 调度或 `ProGuidanceRunner` 的指导轮协议。
+`harness.toml` 的 `[controller].project_adapter` 指向当前项目实现。adapter API v12 要求 `materialize_stage_evidence_execution`、`normalize_stage_evidence_execution`、`materialize_project_execution`、`normalize_project_execution` 和 `normalize_measurement_outcome`，并把 Pro 已选 profile 物化成不可变 Flash campaign contract；旧的 `evidence_artifact_refs` / `evidence_model_command` 以及 Adapter 内的 `execute` / `reconcile` 入口已删除。`normalize_optimization_capability` 是接入 STA Scope 时的可选映射接口；缺失时 Bridge 返回保守的 capability-unavailable observation，由 Optimization Skill 生成顶层 STA 义务，不阻塞未接入该 Skill 的项目。通用加载器只校验稳定方法，不读取模块登记簿、Optimization 或 Closure 的内部 schema。当前 `task02_project_adapter:Task02ProjectAdapter` 组合已有 DecisionPacket 逻辑并读取本项目黑盒配置；实际单次配置修改由无循环、无模型、无战略判断的 `task02_project_executor.py` 完成，Optimization 验证则由同样无状态的 `task02_optimization_executor.py` 完成。新的相似项目可以替换 Adapter 与这些执行器，而无需修改 supervisor 调度或 `ProGuidanceRunner` 的指导轮协议。
 
 Task 02 的执行结果优先级也由 Adapter 统一归一化：基础设施不确定、功能/预检确定失败、Closure Skill 的测量不完整、完成。`pro_supervisor.py` 和 `ppa_agent_loop.py` 不再各自根据 `ppa_exit=124/137` 重建 timeout 分类；退出码只是原始项目事实，Closure phase 和语义门仍由 `rtl-closure-governance` 唯一产生。Adapter 不据此决定重试、停止或下一动作。
 
@@ -152,8 +152,10 @@ Closure phase 不会因此被提升，测量不完整也不会被改写成 RTL �
 python3 harness/pro_supervisor.py --pro-model <pro-selector> --flash-model <flash-selector>
 ```
 
-Pro 必须输出结构化决策：`continue` 时选择 1--6 个 Flash 回合，并给出仅作优先级提示的
-`flash_directive`；Task 02 controller 仍自行执行所有回归、预算和文件范围限制。Pro 可在边界
+Pro 必须输出结构化决策：`continue` 时选择 1--6 个 Flash 步骤，并从 DecisionPacket 给出的
+campaign profile 中选择修复域、修改权限和验证级别，同时声明不可变目标、允许路径和测量预算上限。
+supervisor 将这些字段物化为带内容指纹的 `flash_campaign_contract_<cycle>.json`；Flash planner 每轮
+只能提出该契约内的一个战术工作包，不能重选 local/architecture、测量范围或修复域。Pro 可在边界
 选择修订任务卡，或修复 Task 02 harness（controller、supervisor、PPA/功能远端脚本、环境配置和
 测试）；动作失败或越界写入都会恢复该动作前快照。RTL、reference、testbench 和服务器 runs 始终
 不属于 Pro 的直接修复范围。
@@ -185,8 +187,9 @@ RTL/harness 假设混在同一实验中。若验证失败，结果和已展开�
 `continue` 的语义只有一个：启动下一批 Flash，因此可能运行功能回归、预检和 PPA。若 Pro 只需要复盘
 已经完成的 STA 路径，必须输出 `inspect_existing_sta_evidence`（`flash_attempts=0`）。supervisor 将只读
 服务器不可变 `runs/<run-id>/sta.log` 的 `STA_TIMING_BEGIN..END` 区段，写入当前 session 的
-`sta_evidence_<cycle>.json` 与 `pro_progress.md`；不会启动 Flash/EDA，也不会修改服务器 run。若 directive
-明确写了“只读已有 STA 且禁止新 PPA”，但 action 误为 `continue`，controller 会安全地改为此只读动作。
+`sta_evidence_<cycle>.json` 与 `pro_progress.md`；不会启动 Flash/EDA，也不会修改服务器 run。若 Pro 的
+文字理由要求“只读已有 STA 且禁止新 PPA”，但结构化 action 误为 `continue`，指导轮会拒绝这份不一致决策；
+controller 不会把一个已选择动作改写成另一个动作。
 相同 source run 已读过一次则以 `no_new_evidence` 停止，避免把同一日志重复送给 Pro。
 
 若上述摘要不足以判断一条路径，Pro 可选择 `inspect_run_evidence`，并输出严格的 `evidence_request`：
@@ -270,8 +273,9 @@ python3 harness/pro_supervisor.py --declare-pending-harness-change \
 ## 顶层已链接但无时序路径的强制诊断
 
 `sta_status=ok_no_path` 只说明 `report_checks` 没有打印可用路径，不能说明 RTL 慢、快或已经没有问题。
-若旧 feedback 没有同一真实链接设计的 `sta_diag_*` 事实，supervisor 会覆盖 Pro 的本轮文字决策，强制一次
-零修改、仅 `top_level_sta` 单网表 smoke（预算按分区 `timeout_s` 提升到合法档位）。该 run 会记录：`clk` 端口数、已创建时钟数、寄存器数和非时钟
+若旧 feedback 没有同一真实链接设计的 `sta_diag_*` 事实，DecisionPacket 只暴露固定的只读诊断动作；
+物化后的 campaign contract 只允许一次零修改、`top_level_sta` 单网表 smoke（预算按分区 `timeout_s`
+提升到合法档位）。该 run 会记录：`clk` 端口数、已创建时钟数、寄存器数和非时钟
 输入数。新证据落盘后才允许 Pro 选择修 harness/约束、修订任务卡或停止调试；不会连续盲跑完整 PPA。
 
 ## 强制治理门禁
@@ -282,25 +286,28 @@ python3 harness/pro_supervisor.py --declare-pending-harness-change \
 这些阈值均可通过 `--max-*` 参数调整并记录到 `session_state.json`。默认长运行窗口为 24 个 Pro 决策、
 72 个 Flash 回合、86,400 秒请求 PPA 预算及 7 天墙钟；用户仍可通过 `stop.request` 在任一批次边界停止。
 
-默认每 3 个 Flash 批次，supervisor 会向 controller 传入 `--force-full-measurement` 与
-`--final-regression`：前者禁止 targeted PPA，后者在该批次结束后执行 prompt-0 的 48-token 回归。
-可分别以 `--full-ppa-every-batches` 和 `--full-regression-every-batches` 调整。
+旧的周期性 `--force-full-measurement`、`--final-regression` 及对应 cadence 参数已经删除，因为它们会在
+Pro 决策后改变 campaign 的验证策略。targeted 连续得到两次有效测量后升级一次 full，仍是 controller
+内部的确定性证据覆盖规则；架构改动和高风险控制/数据通路 RTL diff 仍强制 prompt-0/48-token 回归。
+这两类安全门都由真实 diff 触发，不由 Flash planner 决定，也不会污染只读审计工作包。
 
 ## 测量计划模式
 
-`harness/ppa_agent_loop.py` 只认 controller 自己的测量计划，不信 AI 的空口说明：full 是安全默认；
-`local` 且确实只改一个 RTL 文件时 targeted 才成立；脚本/测量 harness 改动且无 RTL 改动时，controller
-把 targeted 保留为 smoke——冒烟分区取 planner 显式声明且通过校验的合法分区（一个分区时跑单网表 smoke，
-多个分区时跑 targeted 分区集），而不是写死 `harness/ppa.toml` 里第一个已配置分区，绝不因此重复
-完整分区套件。这样脚本修复既能在秒级拿到新的真实面积/时序/scope 证据，又不会触发 29 分区全量超时。
-若一个假设最终没有产生任何受管文件改动（既无 RTL 改动也无 harness/脚本改动），controller 会路由到
-16-token 功能计数点并跳过 PPA，而不是把无新证据的假设误提升为 full 并重复相同分区测量。唯一例外是
-planner 显式声明 targeted 并给出合法分区名：它表示“重验一个已落地但尚未得到 PPA 验证的 harness/测量
-改动”（例如先前落地、但 PPA/STA 验证从未完成的 closure 修复），属于具体 PPA 假设而非纯计数点，controller
-会按请求分区跑单网表 smoke（一个分区时）或 targeted 分区集，而不是降级为功能计数点。该计数点会用真实
+`harness/ppa_agent_loop.py` 只消费不可变 campaign contract。Pro 选择 `sta_targeted` 或 `sta_full`；
+Flash planner 不再输出 `change_mode`、`measurement_mode` 或 `affected_partitions`。真实 RTL diff 仍交给
+`rtl-sta-scope` 决定最小可辩护范围；固定的只读测量动作由 DecisionPacket/Adapter 写入明确分区。
+`local` 工作包最多声明并实际修改一个文件，`architecture` 可以是同一假设的多文件原子变更，`read_only`
+不得产生任何受管 diff。planner 必须输出结构化 `flash_work_package`，executor 的真实 diff 必须是其
+`planned_paths` 子集，否则立即恢复并以 `contract_violation` 结束当前 campaign。
+单个工作包可以把权限进一步收紧：可在一个允许编辑的 campaign 中选择 `access=read_only` 和
+`verification_request=none` 完成独立审计；编辑工作包则必须请求 contract 规定的验证。这样“一轮局部修改、
+下一轮只审计”不需要 Pro 逐条遥控，也不会让 Flash 借审计轮继续写文件。
+
+若一个允许测量的战术假设没有产生任何受管文件改动且契约未指定分区，controller 会路由到 16-token
+功能计数点并跳过 PPA，而不是擅自扩大测量。该计数点会用真实
 feedback 解析 `summary.json.requested_seq_len` 与 `simulation.log` 的 `PASS cycles=`，回报 C(n) 与边际
 `m=(C(n2)-C(n1))/(n2-n1)`；任何一项缺失都写“未测得”，绝不把 AI 估算或旧轮数字回填。supervisor 的
-`--force-full-measurement` 里程碑仍会周期性禁用 targeted 与 smoke，强制一次 full。
+安全回归 cadence 不改变 campaign 的 STA 策略。
 
 ## 可迁移的 STA 范围与 RTL 优化治理
 
@@ -324,10 +331,12 @@ feedback 解析 `summary.json.requested_seq_len` 与 `simulation.log` 的 `PASS 
 收益与风险成本。无可归因量化字段的模块直接不具备自主优化资格，不能靠模型补造分数，也不能把默认负分写成“没有优化必要”。
 
 Stage-1 候选由 Skill 按量化证据评分并在超过硬阈值时自动选择，不再由 Pro 输出 `optimize_rtl`。Skill runner 调用 `--flash-model` 指定的单次模型，只允许修改该模块唯一 RTL 文件；随后通过项目执行端口在同一 campaign 内完成必要的功能门、Yosys 预检和局部/受影响锥 STA。若最小 STA 范围要求共享/全局 STA，runner 输出验证义务并结束本次内部循环，Evidence/Pro 再决定如何与黑盒展开主线合并。功能失败不启动 STA；默认允许两次同候选修复，耗尽后从 Skill checkpoint
-自动回退。初次测量不完整后，默认最多允许两次无编辑重测；重测不会再次编辑 RTL，指纹匹配时复用功能证据，指纹缺失或变化时只重新跑功能门。两次仍未完成则进入 `rollback_required`；Skill runner 执行并验证恢复，controller 只提供执行端口。SSH/容器不确定不计入修复或领域测量重试。候选生命周期写入
+自动回退。初次测量不完整后，默认最多允许两次无编辑重测；重测只接受与当前 RTL 和验证上下文精确绑定的功能/预检证据，候选或上下文指纹变化会形成基础设施/状态一致性边界，不会被伪装成 RTL 失败。两次仍未完成则进入 `rollback_required`；Skill runner 执行并验证恢复，controller 只提供执行端口。SSH/容器不确定不计入修复或领域测量重试。候选生命周期写入
 `status/task02_optimization_state.json`；被打断的主线只保存为指向 Registry 当前主线的不可变引用，不再维护第二份 Transaction Ledger。功能通过后，实际 diff 再交给
 `rtl-sta-scope`，而不是相信 planner 自报的 targeted/full。局部或 affected-cone（受影响逻辑锥）STA 通过只记
 `local_accepted`；需要顶层验收时写入 `acceptance_debt`，直到匹配的 `top_level_partial/top_level_complete` 证据才清除。
+
+Task 02 的 Optimization 项目验证由 `task02_optimization_executor.py` 提供两个无状态 operation：`functional_preflight` 与 `measure_candidate`。它只校验候选指纹、运行 Skill 已指定的项目命令并记录原始事实，不调用模型、STA Scope 或 Closure，不选择下一阶段，也不决定接受、重试或回退。`ppa_agent_loop.py` 不再含任何 Optimization 参数、验证入口或生命周期分支；STA Scope 通过通用 capability 接口接入，缺失时由 Optimization Skill 保守交接顶层 STA 义务。
 
 STA 成功不会自动等同于优化成功。项目 adapter 只上报规范化测量字段和产物可用性，Optimization Skill 判定测量完整性与同口径收益；默认要求面积或延迟至少改善 1%，且另一项不得恶化超过 1%。超时、截断和缺失测量产物属于可有限重试的不完整测量；工具已完成但口径键不同则直接回退暂缓，不再当作超时重测。两个比例都可由 supervisor 参数调整。
 

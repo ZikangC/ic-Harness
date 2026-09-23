@@ -90,9 +90,26 @@ def main() -> None:
     class ProjectPort:
         @staticmethod
         def materialize_optimization_execution(request, **_context):
+            if request["executor_ref"] == "capability.resolve_sta_scope":
+                return {"capability_request": {
+                    "capability_ref": "rtl.sta_scope", "packet": packet}}
             assert request["executor_ref"] == "project.verify_optimization"
             return {"command": ["project-controller", "--verify"],
                     "directive": "verify only\n"}
+
+        @staticmethod
+        def normalize_optimization_capability(request, *, decision=None,
+                                              unavailable_reason=None):
+            return {
+                "observation_id": "scope-observation",
+                "campaign_id": request.get("campaign_id"),
+                "module": request.get("module"),
+                "status": ("sta_scope_unavailable" if unavailable_reason
+                           else "sta_scope_resolved"),
+                "sta_scope_gate": decision,
+                "measurement_partitions": ["stage"],
+                "measurement_timeout_seconds": 180,
+            }
 
     def execute_project(plan):
         captured_plan.update(plan)
@@ -108,6 +125,25 @@ def main() -> None:
     assert captured_plan["kind"] == "local"
     assert captured_plan["execution"]["operation_id"] == "op"
     assert captured_plan["directive_path"].endswith("test-directive.md")
+    capability_response = optimization_execute_request(
+        optimization_root, ProjectPort(), {
+            "executor_ref": "capability.resolve_sta_scope",
+            "operation_id": "scope-op", "campaign_id": "campaign",
+            "module": "stage"}, sta_scope_skill=sta_root)
+    assert capability_response["status"] == "sta_scope_resolved"
+
+    class ProjectWithoutScopeMapping:
+        @staticmethod
+        def materialize_optimization_execution(_request, **_context):
+            return {"capability_request": {
+                "capability_ref": "rtl.sta_scope", "packet": packet}}
+
+    unplugged = optimization_execute_request(
+        optimization_root, ProjectWithoutScopeMapping(), {
+            "executor_ref": "capability.resolve_sta_scope",
+            "operation_id": "scope-unplugged", "campaign_id": "campaign",
+            "module": "stage"}, sta_scope_skill=sta_root)
+    assert unplugged["status"] == "sta_scope_unavailable"
     registry = module_registry_reconcile(registry_root, {
         "project_id": "bridge", "session_id": "s", "cycle_id": 1,
         "phase": "pre_decision", "observed_at": "2026-09-16T12:00:00+08:00",

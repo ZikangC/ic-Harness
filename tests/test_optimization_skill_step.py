@@ -50,8 +50,37 @@ def observation(identity: str, status: str, **extra: object) -> dict[str, object
     }
 
 
+def measurement_state(*, retries: int = 2) -> dict[str, object]:
+    functional = step({"state": candidate_state(retries=retries),
+                       "observation": observation(
+                           "functional-pass", "functional_passed",
+                           functional_evidence={"functional_quick_exit": 0},
+                           preflight_evidence={"preflight_exit": 0})})
+    assert functional["requested_execution"]["executor_ref"] == \
+        "capability.resolve_sta_scope"
+    scoped = step({"state": functional["state"], "observation": observation(
+        "scope", "sta_scope_resolved",
+        sta_scope_gate={"scope": "local_module"},
+        measurement_partitions=["compute"],
+        measurement_timeout_seconds=600)})
+    assert scoped["requested_execution"]["operation"] == "measure_candidate"
+    return scoped["state"]
+
+
 def main() -> None:
-    state = candidate_state(retries=2)
+    functional_only = step({"state": candidate_state(), "observation": observation(
+        "functional-for-unplugged-scope", "functional_passed",
+        functional_evidence={"functional_quick_exit": 0},
+        preflight_evidence={"preflight_exit": 0})})
+    unplugged_scope = step({
+        "state": functional_only["state"],
+        "observation": observation(
+            "scope-unavailable", "sta_scope_unavailable", reason="not installed")})
+    assert unplugged_scope["state"]["phase"] == "waiting_external_verification"
+    assert unplugged_scope["handoff"]["verification_obligation"][
+        "required_scope"] == "top_level_complete"
+
+    state = measurement_state(retries=2)
     first = step({"state": state, "observation": observation(
         "incomplete-1", "measurement_incomplete",
         rtl_fingerprint="edited", measurement_partitions=["compute"],
@@ -67,7 +96,7 @@ def main() -> None:
     assert third["state"]["phase"] == "rollback_required"
     assert third["requested_execution"]["executor_ref"] == "optimization.rollback"
 
-    mismatch = step({"state": candidate_state(), "observation": observation(
+    mismatch = step({"state": measurement_state(), "observation": observation(
         "complete-mismatch", "measurement_observed",
         measurement={"comparability_key": "different", "area_um2": 90.0,
                      "delay_ps": 900.0, "source_run": "new",
@@ -79,7 +108,7 @@ def main() -> None:
     assert mismatch["state"]["current_candidate"][
         "pending_terminal_reason"] == "measurement_incomparable"
 
-    improved = step({"state": candidate_state(), "observation": observation(
+    improved = step({"state": measurement_state(), "observation": observation(
         "complete-improved", "measurement_observed",
         measurement={"comparability_key": BASELINE["comparability_key"],
                      "area_um2": 98.0, "delay_ps": 995.0,

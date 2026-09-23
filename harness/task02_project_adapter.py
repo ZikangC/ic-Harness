@@ -7,6 +7,7 @@ Registry, Closure, Optimization lifecycle policy, or process supervision.
 """
 from __future__ import annotations
 
+import difflib
 import re
 import json
 import hashlib
@@ -19,14 +20,16 @@ from decision_packet_adapter import DecisionPacketError
 from module_registry_adapter import (
     optimization_packet_from_registry, registry_mainline, registry_mainline_ref)
 from project_adapter_api import ProjectAdapterError
+from design_context_adapter import design_context_slice
 from optimization_obligation_adapter import (
     match_optimization_sta_obligation, optimization_obligation_decision_actions)
 from rtl_skill_bridge import (compact_module_registry_hot_view,
+                              conservative_rtl_change_packet,
                               stage_evidence_envelope)
 
 
 class Task02ProjectAdapter:
-    api_version = 10
+    api_version = 12
     expansion_partition = "top_level_sta"
     evidence_model_argv_template = (
         "omp", "-p", "--cwd", "{project_root}",
@@ -369,6 +372,60 @@ class Task02ProjectAdapter:
                     return [item for item in match.group(1).split() if item]
         return []
 
+    def partition_timeouts(self) -> dict[str, int]:
+        """Read exact project partition names and their declared tool windows."""
+        values: dict[str, int] = {}
+        current = None
+        for line in self.ppa_config.read_text(encoding="utf-8").splitlines():
+            if line.strip() == "[[partitions]]":
+                current = None
+                continue
+            name_match = re.match(
+                r'\s*name\s*=\s*"([A-Za-z0-9_.-]+)"\s*$', line)
+            if name_match:
+                current = name_match.group(1)
+                values.setdefault(current, 0)
+                continue
+            timeout_match = re.match(r"\s*timeout_s\s*=\s*(\d+)\s*$", line)
+            if current and timeout_match:
+                values[current] = int(timeout_match.group(1))
+        return values
+
+    def optimization_sta_scope_packet(
+            self, execution: Mapping[str, object]) -> dict[str, object]:
+        """Map one candidate identity to the portable STA-scope input schema."""
+        module = str(execution.get("module") or "")
+        rtl_ref = execution.get("rtl_ref") or self.rtl_file_for_module(module)
+        checkpoint_ref = str(execution.get("checkpoint_ref") or "")
+        checkpoint = Path(checkpoint_ref)
+        if not rtl_ref or not checkpoint_ref:
+            raise ProjectAdapterError("optimization STA scope identity is incomplete")
+        relative = Path(str(rtl_ref))
+        current = (self.project_root / relative).resolve()
+        baseline = (checkpoint / "preimage" / relative).resolve()
+        try:
+            current.relative_to(self.project_root)
+            baseline.relative_to(checkpoint.resolve())
+        except ValueError as error:
+            raise ProjectAdapterError(
+                "optimization STA scope paths escape their roots") from error
+        if not current.is_file() or not baseline.is_file():
+            raise ProjectAdapterError("optimization STA scope RTL or checkpoint is missing")
+        before = baseline.read_text(
+            encoding="utf-8", errors="replace").splitlines(keepends=True)
+        after = current.read_text(
+            encoding="utf-8", errors="replace").splitlines(keepends=True)
+        changes = "".join(difflib.unified_diff(
+            before, after, fromfile=f"baseline/{relative.as_posix()}",
+            tofile=f"current/{relative.as_posix()}"))
+        context = design_context_slice(
+            self.project_root, rtl_paths=[relative.as_posix()],
+            module_hints=[module])
+        return conservative_rtl_change_packet(
+            changes, [relative.as_posix()], change_mode="local",
+            remaining_blackboxes=self.current_blackboxes(),
+            affected_modules=[module], design_context=context)
+
     def prepare_cycle(self, *, state: Mapping[str, object], stage_record: object,
                       evidence_fingerprint: str, stop_requested: bool,
                       functional_baseline_clean: bool,
@@ -683,35 +740,43 @@ class Task02ProjectAdapter:
                     "evidence": {"candidate": dict(candidate)},
                 })
             return {"executor_ref": executor_ref, "runner_request": request}
+        if executor_ref == "capability.resolve_sta_scope":
+            return {
+                "executor_ref": executor_ref,
+                "capability_request": {
+                    "capability_ref": "rtl.sta_scope",
+                    "packet": self.optimization_sta_scope_packet(execution),
+                },
+            }
         if executor_ref != "project.verify_optimization":
             raise ProjectAdapterError(
                 f"unsupported optimization executor_ref: {executor_ref}")
-        directive_path = Path(str(context.get("directive_path") or ""))
-        ppa_controller = Path(str(context.get("ppa_controller") or ""))
-        sta_scope_skill = Path(str(context.get("sta_scope_skill") or ""))
-        closure_skill = Path(str(context.get("closure_skill") or ""))
-        checkpoint = Path(str(execution.get("checkpoint_ref") or ""))
-        if not all(str(path) for path in (
-                directive_path, ppa_controller, sta_scope_skill, closure_skill, checkpoint)):
+        operation = str(execution.get("operation") or "")
+        if operation not in {"functional_preflight", "measure_candidate",
+                             "consume_external_sta_obligation"}:
+            raise ProjectAdapterError(
+                f"unsupported optimization verification operation: {operation}")
+        optimization_executor = Path(str(context.get("optimization_executor") or ""))
+        checkpoint_ref = str(execution.get("checkpoint_ref") or "")
+        checkpoint = Path(checkpoint_ref)
+        rtl_ref = execution.get("rtl_ref") or self.rtl_file_for_module(module)
+        if not optimization_executor.is_file() or not checkpoint_ref or rtl_ref is None:
             raise ProjectAdapterError("optimization verification paths are incomplete")
         command = [
-            sys.executable, ppa_controller.as_posix(), "--skip-baseline",
-            "--max-attempts", "1", "--model", str(context.get("model") or ""),
-            "--supervisor-directive", directive_path.as_posix(),
-            "--closure-governance-skill", closure_skill.as_posix(),
-            "--optimization-module", module,
-            "--optimization-candidate-id", campaign_id,
-            "--max-rtl-repair-attempts", str(context.get("max_repair_attempts") or 2),
-            "--sta-scope-skill", sta_scope_skill.as_posix(),
-            "--optimization-baseline", (checkpoint / "preimage").as_posix(),
-            "--optimization-verify-only",
+            sys.executable, optimization_executor.as_posix(),
+            "--operation", ("measure_candidate"
+                            if operation == "consume_external_sta_obligation"
+                            else operation),
+            "--module", module,
+            "--campaign-id", campaign_id,
+            "--rtl-ref", Path(str(rtl_ref)).as_posix(),
+            "--checkpoint", checkpoint.as_posix(),
         ]
         fingerprint = str(execution.get("expected_rtl_fingerprint") or "")
-        if fingerprint:
-            command.extend(["--optimization-expected-rtl-sha256", fingerprint])
-        integration_target = str(execution.get("integration_target") or "")
-        if integration_target:
-            command.extend(["--optimization-integration-target", integration_target])
+        if not fingerprint:
+            raise ProjectAdapterError(
+                "optimization verification requires the candidate RTL fingerprint")
+        command.extend(["--expected-rtl-sha256", fingerprint])
         functional_proof = execution.get("functional_evidence")
         functional_proof = functional_proof if isinstance(functional_proof, Mapping) else {}
         functional_clean = all(functional_proof.get(key) == 0 for key in (
@@ -719,28 +784,37 @@ class Task02ProjectAdapter:
         if (fingerprint and functional_clean
                 and functional_proof.get("rtl_fingerprint") == fingerprint
                 and functional_proof.get("verification_context_fingerprint")):
-            command.extend(["--optimization-functional-proof-rtl-sha256", fingerprint])
-            command.extend(["--optimization-functional-proof-context-sha256",
+            command.extend(["--functional-proof-rtl-sha256", fingerprint])
+            command.extend(["--functional-proof-context-sha256",
                             str(functional_proof["verification_context_fingerprint"])])
         preflight_proof = execution.get("preflight_evidence")
         preflight_proof = preflight_proof if isinstance(preflight_proof, Mapping) else {}
         if (fingerprint and preflight_proof.get("preflight_exit") == 0
                 and preflight_proof.get("rtl_fingerprint") == fingerprint
                 and preflight_proof.get("verification_context_fingerprint")):
-            command.extend(["--optimization-preflight-proof-rtl-sha256", fingerprint])
-            command.extend(["--optimization-preflight-proof-context-sha256",
+            command.extend(["--preflight-proof-rtl-sha256", fingerprint])
+            command.extend(["--preflight-proof-context-sha256",
                             str(preflight_proof["verification_context_fingerprint"])])
         partitions = execution.get("measurement_partitions")
-        if isinstance(partitions, list):
-            for partition in partitions:
+        selected_partitions = (
+            [str(item) for item in partitions if isinstance(item, str) and item]
+            if isinstance(partitions, list) else [])
+        if operation == "consume_external_sta_obligation":
+            selected_partitions = [self.expansion_partition]
+        for partition in selected_partitions:
                 if isinstance(partition, str) and partition:
-                    command.extend(["--optimization-measurement-partition", partition])
+                    command.extend(["--measurement-partition", partition])
         timeout = execution.get("measurement_timeout_seconds")
+        if (operation == "consume_external_sta_obligation"
+                and not isinstance(timeout, int)):
+            timeout = max(180, self.partition_timeouts().get(
+                self.expansion_partition, 0))
         if isinstance(timeout, int) and timeout > 0:
-            command.extend(["--measurement-default-timeout-seconds", str(timeout)])
+            command.extend(["--measurement-timeout-seconds", str(timeout)])
         return {
             "executor_ref": executor_ref,
-            "directive": "只验证当前 Optimization Skill 候选；禁止编辑 RTL。\n",
+            "directive": (
+                "只执行当前 Optimization Skill 请求的无状态项目验证；禁止编辑 RTL。\n"),
             "command": command,
         }
 
@@ -759,13 +833,11 @@ class Task02ProjectAdapter:
 
     def materialize_external_optimization_sta(
             self, execution: Mapping[str, object], **context: object) -> dict[str, object]:
-        """Reuse verify-only transport to consume one yielded global STA duty."""
+        """Map one yielded global STA duty to the stateless project executor."""
         materialized = self.materialize_optimization_execution(execution, **context)
         command = materialized.get("command")
         if not isinstance(command, list):
             raise ProjectAdapterError("external optimization STA command is missing")
-        if "--optimization-consume-external-sta" not in command:
-            command.append("--optimization-consume-external-sta")
         materialized["directive"] = (
             "消费已登记的顶层 STA 验证义务；禁止 planner、executor 和任何 RTL/harness 修改。\n")
         return materialized
@@ -775,9 +847,7 @@ class Task02ProjectAdapter:
             decision_packet: Mapping[str, object] | None,
             optimization_handoff: Mapping[str, object] | None,
             directive_path: Path,
-            ppa_controller: Path, sta_scope_skill: Path,
-            closure_skill: Path, model: str | None,
-            max_repair_attempts: int) -> dict[str, object] | None:
+            optimization_executor: Path) -> dict[str, object] | None:
         """Materialize only a Pro-approved shared/global STA handoff."""
         selected = decision if isinstance(decision, Mapping) else {}
         packet = decision_packet if isinstance(decision_packet, Mapping) else {}
@@ -799,9 +869,7 @@ class Task02ProjectAdapter:
             return None
         materialized = self.materialize_external_optimization_sta(
             execution, directive_path=directive_path,
-            ppa_controller=ppa_controller, sta_scope_skill=sta_scope_skill,
-            closure_skill=closure_skill, model=model,
-            max_repair_attempts=max_repair_attempts)
+            optimization_executor=optimization_executor)
         command = materialized.get("command")
         if not isinstance(command, list) or not command:
             raise ProjectAdapterError("project adapter returned no optimization command")
@@ -812,6 +880,79 @@ class Task02ProjectAdapter:
             "directive": materialized.get("directive"),
             "obligation_match": dict(match),
         }
+
+    def normalize_optimization_capability(
+            self, execution: Mapping[str, object], *, decision: object = None,
+            unavailable_reason: str | None = None) -> dict[str, object]:
+        """Map a generic STA-scope decision to Task-02 measurement availability."""
+        module = str(execution.get("module") or "")
+        identity = {
+            "operation_id": execution.get("operation_id"),
+            "campaign_id": execution.get("campaign_id"),
+            "module": module,
+        }
+        rtl_ref = execution.get("rtl_ref") or self.rtl_file_for_module(module)
+        rtl_path = (self.project_root / Path(str(rtl_ref))).resolve() if rtl_ref else None
+        rtl_fingerprint = None
+        if rtl_path is not None and rtl_path.is_file():
+            try:
+                rtl_path.relative_to(self.project_root)
+                rtl_fingerprint = hashlib.sha256(rtl_path.read_bytes()).hexdigest()
+            except (OSError, ValueError):
+                rtl_fingerprint = None
+        expected = str(execution.get("expected_rtl_fingerprint") or "")
+        if expected and rtl_fingerprint != expected:
+            status = "infra_uncertain"
+            observation = {
+                **identity, "status": status, "rtl_fingerprint": rtl_fingerprint,
+                "reason": "candidate_identity_changed_before_sta_scope",
+            }
+        elif unavailable_reason is not None:
+            status = "sta_scope_unavailable"
+            observation = {
+                **identity, "status": status, "rtl_fingerprint": rtl_fingerprint,
+                "reason": unavailable_reason,
+            }
+        else:
+            gate = dict(decision) if isinstance(decision, Mapping) else {}
+            scope = str(gate.get("scope") or "")
+            timeouts = self.partition_timeouts()
+            partitions: list[str] = []
+            if scope == "local_module" and module in timeouts:
+                partitions = [module]
+            elif scope == "affected_cone":
+                affected = gate.get("affected_modules")
+                affected = affected if isinstance(affected, list) else []
+                partitions = [str(item) for item in affected if str(item) in timeouts]
+            external = scope in {"top_level_partial", "top_level_complete"}
+            if not external and not partitions:
+                raw_reasons = gate.get("reason_codes")
+                raw_reasons = raw_reasons if isinstance(raw_reasons, list) else []
+                gate = {
+                    **gate,
+                    "requested_scope": scope or None,
+                    "scope": "top_level_partial",
+                    "reason_codes": [
+                        *[str(item) for item in raw_reasons
+                          if isinstance(item, str)],
+                        "project_local_measurement_partition_unavailable",
+                    ],
+                }
+                external = True
+            status = ("external_verification_required"
+                      if external else "sta_scope_resolved")
+            timeout = max(
+                [180, *[timeouts.get(name, 0) for name in partitions]])
+            observation = {
+                **identity, "status": status, "rtl_fingerprint": rtl_fingerprint,
+                "sta_scope_gate": gate,
+                "measurement_partitions": partitions,
+                "measurement_timeout_seconds": timeout,
+            }
+        observation["observation_id"] = hashlib.sha256(json.dumps(
+            observation, ensure_ascii=False, sort_keys=True,
+            separators=(",", ":")).encode("utf-8")).hexdigest()
+        return observation
 
     def normalize_external_optimization_observation(
             self, execution: Mapping[str, object], obligation_match: Mapping[str, object],
@@ -840,7 +981,7 @@ class Task02ProjectAdapter:
                 current = hashlib.sha256(rtl_path.read_bytes()).hexdigest()
             except (ValueError, OSError):
                 current = ""
-        audit = result.get("sta_closure_audit")
+        audit = context.get("closure_audit") or result.get("sta_closure_audit")
         audit = audit if isinstance(audit, Mapping) else {}
         ppa_log = result.get("ppa_log")
         ppa_path = (self.project_root / str(ppa_log)).resolve() if ppa_log else None
@@ -858,9 +999,7 @@ class Task02ProjectAdapter:
             target_match and target_match[-1].lower() in {"yes", "true"})
         required_scope = str(obligation_match.get("required_scope") or "")
         measured_scope = str(result.get("measurement_scope") or "")
-        reported_incomplete = bool(
-            result.get("optimization_status") == "measurement_incomplete"
-            or context.get("measurement_incomplete") is True)
+        reported_incomplete = context.get("measurement_incomplete") is True
         if process_exit in {75, 76} or result.get("kind") == "infrastructure_uncertain":
             status = "infra_uncertain"
         else:
@@ -894,18 +1033,20 @@ class Task02ProjectAdapter:
         results = [item for item in raw_results if isinstance(item, Mapping)] \
             if isinstance(raw_results, list) else []
         result = dict(results[-1]) if results else {}
-        flash_exit = context.get("process_exit")
-        optimization_status = str(result.get("optimization_status") or "")
-        if flash_exit in (75, 76) or result.get("kind") == "infrastructure_uncertain":
+        process_exit = context.get("process_exit")
+        operation = str(execution.get("operation") or "")
+        verification_status = str(result.get("verification_status") or "")
+        if process_exit in (75, 76) or result.get("kind") == "infrastructure_uncertain":
             status = "infra_uncertain"
-        elif optimization_status == "functional_repair_required":
+        elif verification_status == "functional_failed":
             status = "functional_failed"
-        elif optimization_status == "external_verification_required":
-            status = "external_verification_required"
-        elif (optimization_status == "measurement_incomplete"
-              or context.get("measurement_incomplete") is True):
+        elif verification_status == "functional_passed":
+            status = "functional_passed"
+        elif (operation == "measure_candidate"
+              and context.get("measurement_incomplete") is True):
             status = "measurement_incomplete"
-        elif optimization_status == "accepted":
+        elif verification_status == "measurement_executed" \
+                and result.get("ppa_exit") == 0:
             measurement = context.get("measurement")
             measurement = measurement if isinstance(measurement, Mapping) else {}
             ppa_log = result.get("ppa_log")
@@ -918,10 +1059,13 @@ class Task02ProjectAdapter:
                 except ValueError:
                     artifact_available = False
             status = "measurement_observed"
-        elif optimization_status in {"no_change", "rolled_back_no_change"}:
+        elif verification_status == "no_change":
             status = "no_change"
-        elif optimization_status in {"verification_failed", "rolled_back"}:
+        elif verification_status == "verification_failed":
             status = "verification_failed"
+        elif verification_status in {
+                "candidate_identity_mismatch", "verification_contract_invalid"}:
+            status = "infra_uncertain"
         else:
             status = "infra_uncertain"
         identity = {
@@ -947,7 +1091,10 @@ class Task02ProjectAdapter:
                 identity, ensure_ascii=False, sort_keys=True,
                 separators=(",", ":")).encode("utf-8")).hexdigest(),
             "rtl_fingerprint": rtl_fingerprint,
-            "functional_evidence": {
+            "functional_evidence": (dict(execution.get("functional_evidence"))
+                                    if operation == "measure_candidate"
+                                    and isinstance(execution.get("functional_evidence"), Mapping)
+                                    else {
                 "functional_quick_exit": result.get("functional_quick_exit"),
                 "functional_medium_exit": result.get("functional_medium_exit"),
                 "mandatory_full_exit": result.get("mandatory_full_exit"),
@@ -956,17 +1103,22 @@ class Task02ProjectAdapter:
                 "rtl_fingerprint": rtl_fingerprint,
                 "verification_context_fingerprint": result.get(
                     "verification_context_fingerprint"),
-            },
-            "preflight_evidence": {
+            }),
+            "preflight_evidence": (dict(execution.get("preflight_evidence"))
+                                   if operation == "measure_candidate"
+                                   and isinstance(execution.get("preflight_evidence"), Mapping)
+                                   else {
                 "preflight_exit": result.get("preflight_exit"),
                 "reused": result.get("preflight_evidence_reused") is True,
                 "source": result.get("preflight_evidence_source"),
                 "rtl_fingerprint": rtl_fingerprint,
                 "verification_context_fingerprint": result.get(
                     "verification_context_fingerprint"),
-            },
-            "sta_scope_gate": result.get("sta_scope_gate"),
-            "measurement_partitions": result.get("measurement_partitions", []),
+            }),
+            "sta_scope_gate": (execution.get("sta_scope_gate")
+                               or result.get("sta_scope_gate")),
+            "measurement_partitions": (result.get("measurement_partitions")
+                                       or execution.get("measurement_partitions", [])),
             "measurement_timeout_seconds": result.get("measurement_timeout_seconds"),
             "measurement_fingerprint": result.get("measurement_fingerprint"),
         }
@@ -974,7 +1126,7 @@ class Task02ProjectAdapter:
             observation["measurement"] = dict(context.get("measurement") or {})
             observation["measurement_artifact_available"] = artifact_available
             observation["ppa_exit"] = result.get("ppa_exit")
-            scope_gate = result.get("sta_scope_gate")
+            scope_gate = execution.get("sta_scope_gate") or result.get("sta_scope_gate")
             scope_gate = scope_gate if isinstance(scope_gate, Mapping) else {}
             covered = [module]
             if scope_gate.get("scope") in {"top_level_partial", "top_level_complete"}:
@@ -986,7 +1138,7 @@ class Task02ProjectAdapter:
                 "measurement_scope": result.get("measurement_scope"),
                 "sta_scope_gate": dict(scope_gate),
                 "covered_modules": sorted(set(covered)),
-                "sta_closure_audit": result.get("sta_closure_audit"),
+                "sta_closure_audit": context.get("closure_audit"),
             }
         return observation
 
@@ -994,7 +1146,8 @@ class Task02ProjectAdapter:
             self, *, plan: Mapping[str, object],
             results: list[Mapping[str, object]], process_exit: int,
             measurement_incomplete: bool, registry: Mapping[str, object],
-            minimum_value_score: float) -> dict[str, object]:
+            minimum_value_score: float,
+            closure_audit: Mapping[str, object] | None = None) -> dict[str, object]:
         """Translate one completed Task-02 process into a portable observation."""
         execution = plan.get("execution")
         execution = execution if isinstance(execution, Mapping) else {}
@@ -1004,7 +1157,8 @@ class Task02ProjectAdapter:
             match = match if isinstance(match, Mapping) else {}
             observation = self.normalize_external_optimization_observation(
                 execution, match, results=results, process_exit=process_exit,
-                measurement_incomplete=measurement_incomplete)
+                measurement_incomplete=measurement_incomplete,
+                closure_audit=closure_audit)
         else:
             packet = optimization_packet_from_registry(
                 registry, mainline=registry_mainline(registry),
@@ -1017,6 +1171,7 @@ class Task02ProjectAdapter:
             return self.normalize_optimization_observation(
                 execution, results=results, process_exit=process_exit,
                 measurement_incomplete=measurement_incomplete,
+                closure_audit=closure_audit,
                 measurement=(candidate.get("value_evidence")
                              if isinstance(candidate, Mapping) else None))
         return observation
