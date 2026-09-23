@@ -2,9 +2,12 @@
 # Invoke a named server-side diagnostic without transferring any run artifacts.
 set -euo pipefail
 
-REMOTE_HOST="txjg7-2@192.168.0.13"
-REMOTE_PROJECT="/home/txjg7-2/ic-project/k3harness"
-CONTAINER="k3demo-eda"
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+eval "$(python3 "$ROOT/harness/environment.py" --shell)"
+REMOTE_HOST=$HARNESS_REMOTE_HOST
+REMOTE_PROJECT=$HARNESS_REMOTE_PROJECT
+CONTAINER=$HARNESS_CONTAINER
+CONTAINER_WORKDIR=$HARNESS_CONTAINER_WORKDIR
 ACTION="auto"
 RUN_ID=""
 SEED="20260706"
@@ -27,4 +30,4 @@ fi
 [[ "$RUN_ID" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "No valid run-id found; provide --run-id" >&2; exit 2; }
 
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE_HOST" \
-  "docker exec -w /work/k3harness '$CONTAINER' sh harness/diagnose.sh '$ACTION' '$RUN_ID' '$SEED' '$PROMPT' '$GROUP_SIZE'"
+  "docker exec -w '$CONTAINER_WORKDIR' '$CONTAINER' sh harness/diagnose.sh '$ACTION' '$RUN_ID' '$SEED' '$PROMPT' '$GROUP_SIZE'"

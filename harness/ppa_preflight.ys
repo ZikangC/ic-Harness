@@ -1,0 +1,15 @@
+# Fast Task-02 synthesis-feasibility gate.  It deliberately stops before
+# technology mapping and ABC, so it can expose RTL/process/memory lowering
+# blockers without paying the full PPA cost.
+#
+# The golden closure instantiates hundreds of CHAN_BASE-parameterized
+# q4_dequant_matvec_ch leaves; deriving each unique paramod in hierarchy is
+# what previously consumed the whole 600s gate.  The leaf is therefore read
+# as a (-lib) blackbox here: hierarchy resolves every leaf instantiation to
+# an empty cell, while the measure flow still reads the real body.
+read_verilog -sv -lib harness/ppa_leaves_blackbox.v
+read_verilog -sv -defer @READFILES@
+hierarchy -check -top TOP
+proc; opt -fast; memory -nomap; opt -fast
+clean
+stat

@@ -1,0 +1,17 @@
+{
+  "stage": "sta_health",
+  "objective": "判断当前 Task 02 run 是否具有可用于下一步战略判断的功能、综合和顶层 STA 证据",
+  "required_fields": [
+    "sta_link_result",
+    "sta_timing_measured",
+    "sta_status",
+    "sta_timing_path_count",
+    "sta_closure_bytes",
+    "sta_closure_module_count"
+  ],
+  "required_skill_roles": [
+    "skill_closure_governance",
+    "skill_module_registry",
+    "skill_optimization_triage"
+  ]
+}

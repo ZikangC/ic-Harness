@@ -15,12 +15,16 @@ from pathlib import Path
 
 
 PROJECT = Path(__file__).resolve().parents[1]
+STRATEGY_ARCHIVE = PROJECT / "runs/strategy_archive"
 
 
 def latest_feedback(task: str) -> Path | None:
     """Return the most recently produced feedback, independent of run-id spelling."""
     candidates = list((PROJECT / "runs").glob(f"{task}-*/feedback.txt"))
-    return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
+    if candidates:
+        return max(candidates, key=lambda path: path.stat().st_mtime)
+    archived = STRATEGY_ARCHIVE / f"latest_{task}_feedback.txt"
+    return archived if archived.exists() else None
 
 
 def read_tail(path: Path, limit: int = 6000) -> str:

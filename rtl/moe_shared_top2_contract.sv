@@ -23,35 +23,61 @@ module moe_shared_top2_contract #(
   // their independently calibrated approximation.  Values are sigmoid(x)
   // rounded to Q1.14 at quarter steps over [0, 2], with symmetric negative
   // handling and the original coarser tails.
-  function automatic logic signed [63:0] router_lerp(
-    input logic signed [63:0] xv,
-    input logic signed [63:0] x0,
-    input logic signed [63:0] x1,
-    input logic signed [63:0] y0,
-    input logic signed [63:0] y1
+  // Division-free lerp, narrowed from 64-bit to 32-bit signed.  Every segment
+  // width below is a power of two (x1-x0 = 4096/32768/65536 = 2^12/2^15/2^16)
+  // and the dividend dx*dy is non-negative in every branch (ax>=x0, y1>y0),
+  // so truncating integer division equals an arithmetic right shift by
+  // k=log2(x1-x0).  The largest product is 32768*1658 < 2^26, far inside
+  // 32-bit signed, so the narrow multiply is bit-exact to the former 64-bit
+  // divide and no rounding bias is needed (p is never negative).
+  function automatic logic signed [31:0] router_lerp(
+    input logic signed [31:0] xv,
+    input logic signed [31:0] x0,
+    input logic signed [31:0] x1,
+    input logic signed [31:0] y0,
+    input logic signed [31:0] y1
   );
-    router_lerp = y0 + ((xv - x0) * (y1 - y0)) / (x1 - x0);
+    logic signed [31:0] dx, dy, p, q, w;
+    logic [4:0] k;
+    w  = x1 - x0;
+    k  = (w == 32'sd4096)  ? 5'd12 :
+         (w == 32'sd32768) ? 5'd15 : 5'd16;
+    dx = xv - x0;
+    dy = y1 - y0;
+    p  = dx * dy;
+    q  = p >>> k;
+    router_lerp = y0 + q;
   endfunction
 
   function automatic logic [FRAC_W:0] router_sigmoid(
     input logic signed [DATA_W-1:0] x_in
   );
-    logic signed [63:0] x, ax, pos, y;
-    localparam logic signed [63:0] ONE = 64'sd1 <<< FRAC_W;
+    logic signed [31:0] x, ax, pos, y;
+    logic signed [31:0] x0, x1, y0, y1;
+    localparam logic signed [31:0] ONE = 32'sd1 <<< FRAC_W;
     begin
       x = x_in;
       ax = (x < 0) ? -x : x;
-      if (ax <= ONE/4)          pos = router_lerp(ax, 0, ONE/4, 8192, 9211);
-      else if (ax <= ONE/2)     pos = router_lerp(ax, ONE/4, ONE/2, 9211, 10198);
-      else if (ax <= 3*ONE/4)   pos = router_lerp(ax, ONE/2, 3*ONE/4, 10198, 11128);
-      else if (ax <= ONE)       pos = router_lerp(ax, 3*ONE/4, ONE, 11128, 11978);
-      else if (ax <= 5*ONE/4)   pos = router_lerp(ax, ONE, 5*ONE/4, 11978, 12735);
-      else if (ax <= 3*ONE/2)   pos = router_lerp(ax, 5*ONE/4, 3*ONE/2, 12735, 13395);
-      else if (ax <= 7*ONE/4)   pos = router_lerp(ax, 3*ONE/2, 7*ONE/4, 13395, 13958);
-      else if (ax <= 2*ONE)     pos = router_lerp(ax, 7*ONE/4, 2*ONE, 13958, 14431);
-      else if (ax <= 4*ONE)     pos = router_lerp(ax, 2*ONE, 4*ONE, 14431, 16089);
-      else if (ax <= 8*ONE)     pos = router_lerp(ax, 4*ONE, 8*ONE, 16089, 16379);
-      else                      pos = ONE;
+      // Segment mux first, then one shared lerp.  Same boundaries, same
+      // interpolation constants and identical lerp/k logic, so the result is
+      // bit-exact to the former per-branch lerp; the 32x32 multiplier count
+      // per sigmoid drops from 10 to 1.  Tail (ax > 8*ONE) pins pos = ONE and
+      // the lerp result is discarded there.
+      if (ax <= ONE/4)        begin x0 = 0;         x1 = ONE/4;   y0 = 8192;  y1 = 9211;  end
+      else if (ax <= ONE/2)   begin x0 = ONE/4;     x1 = ONE/2;   y0 = 9211;  y1 = 10198; end
+      else if (ax <= 3*ONE/4) begin x0 = ONE/2;     x1 = 3*ONE/4; y0 = 10198; y1 = 11128; end
+      else if (ax <= ONE)     begin x0 = 3*ONE/4;   x1 = ONE;     y0 = 11128; y1 = 11978; end
+      else if (ax <= 5*ONE/4) begin x0 = ONE;       x1 = 5*ONE/4; y0 = 11978; y1 = 12735; end
+      else if (ax <= 3*ONE/2) begin x0 = 5*ONE/4;   x1 = 3*ONE/2; y0 = 12735; y1 = 13395; end
+      else if (ax <= 7*ONE/4) begin x0 = 3*ONE/2;   x1 = 7*ONE/4; y0 = 13395; y1 = 13958; end
+      else if (ax <= 2*ONE)   begin x0 = 7*ONE/4;   x1 = 2*ONE;   y0 = 13958; y1 = 14431; end
+      else if (ax <= 4*ONE)   begin x0 = 2*ONE;     x1 = 4*ONE;   y0 = 14431; y1 = 16089; end
+      else if (ax <= 8*ONE)   begin x0 = 4*ONE;     x1 = 8*ONE;   y0 = 16089; y1 = 16379; end
+      else                    begin x0 = 8*ONE;     x1 = 8*ONE;   y0 = 0;     y1 = 0;     end
+      if (ax <= 8*ONE)
+        pos = router_lerp(ax, x0, x1, y0, y1);
+      else
+        pos = ONE;
       y = (x < 0) ? (ONE - pos) : pos;
       router_sigmoid = y[FRAC_W:0];
     end

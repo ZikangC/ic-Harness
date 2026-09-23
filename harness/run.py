@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shlex
@@ -25,6 +26,7 @@ class RunPaths:
     image_bin: Path
     meta: Path
     dump: Path
+    compile_log: Path
     sim_log: Path
     score_log: Path
     summary: Path
@@ -66,8 +68,52 @@ def make_paths(task: str, run_id: str | None) -> RunPaths:
     root = PROJECT / "runs" / stamp
     root.mkdir(parents=True, exist_ok=False)
     return RunPaths(root, root / "golden.npz", root / "image.hex", root / "image.bin",
-                    root / "meta.json", root / "rtl_memory.bin", root / "simulation.log",
+                    root / "meta.json", root / "rtl_memory.bin", root / "compile.log", root / "simulation.log",
                     root / "score.log", root / "summary.json")
+
+
+def verification_cache_key(cfg: dict) -> str:
+    """Hash every compile-time input, but intentionally exclude runtime images/dumps."""
+    digest = hashlib.sha256()
+    digest.update(repr(cfg["verification"]).encode())
+    for directory in (PROJECT / "rtl", PROJECT / "tb"):
+        for source in sorted(path for path in directory.rglob("*") if path.is_file()):
+            digest.update(str(source.relative_to(PROJECT)).encode() + b"\0")
+            digest.update(source.read_bytes())
+    return digest.hexdigest()[:20]
+
+
+def run_verification(cfg: dict, paths: RunPaths) -> tuple[int, str, bool]:
+    verification = cfg["verification"]
+    cache_key = verification_cache_key(cfg)
+    cache_dir = PROJECT / verification.get("cache_dir", "build/verilator-cache") / cache_key
+    executable = cache_dir / "obj_dir" / "Vtb_nano_golden_decoder_top"
+    cache_hit = executable.is_file() and os.access(executable, os.X_OK)
+    values = {
+        "cache_dir": cache_dir,
+        "image": paths.image,
+        "dump": paths.dump,
+        "verilator_jobs": int(verification.get("verilator_jobs", 32)),
+    }
+    timeout = int(verification.get("timeout_seconds", 900))
+    if not cache_hit:
+        build = verification["build_command"].format(**values)
+        build_rc = run_command(["/bin/sh", "-lc", build], cwd=PROJECT,
+                               log_path=paths.compile_log, timeout=timeout)
+        if build_rc:
+            return build_rc, cache_key, False
+        if not executable.is_file():
+            paths.compile_log.write_text(paths.compile_log.read_text(encoding="utf-8", errors="replace") +
+                                         "\nHARNESS_BUILD_ERROR: Verilator finished without the expected executable\n",
+                                         encoding="utf-8")
+            return 1, cache_key, False
+    else:
+        paths.compile_log.write_text(
+            f"VERILATOR_CACHE_HIT key={cache_key}\nexecutable={executable}\n",
+            encoding="utf-8")
+    simulation = verification["simulation_command"].format(**values)
+    return run_command(["/bin/sh", "-lc", simulation], cwd=PROJECT,
+                       log_path=paths.sim_log, timeout=timeout), cache_key, cache_hit
 
 
 def main() -> int:
@@ -101,11 +147,9 @@ def main() -> int:
     elif args.prepare_only:
         summary["reason"] = "prepared only"
     else:
-        template = cfg["verification"]["command"]
-        rendered = template.format(image=paths.image, dump=paths.dump, meta=paths.meta,
-                                   rtl_dir=PROJECT / "rtl", tb_dir=PROJECT / "tb", build_dir=paths.root)
-        sim_rc = run_command(["/bin/sh", "-lc", rendered], cwd=PROJECT, log_path=paths.sim_log,
-                             timeout=int(cfg["verification"].get("timeout_seconds", 900)))
+        sim_rc, cache_key, cache_hit = run_verification(cfg, paths)
+        summary["verilator_cache_key"] = cache_key
+        summary["verilator_cache_hit"] = cache_hit
         summary["simulation_exit"] = sim_rc
         if sim_rc:
             summary["reason"] = "simulation command failed; see simulation.log"

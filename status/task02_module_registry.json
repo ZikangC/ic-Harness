@@ -1,0 +1,4215 @@
+{
+  "conflicts": [],
+  "evidence_watermark": "b6ea7c2fa9b8d3e40d79e37fcc4ec829d832d9d7a3bcff5100a24bc924ae4698",
+  "fingerprints": {
+    "config_fingerprint": "20996de761e2d47880cec1cd87e28afd281b14de6496c342722e35e0ef3da1d1",
+    "evidence_watermark": "b6ea7c2fa9b8d3e40d79e37fcc4ec829d832d9d7a3bcff5100a24bc924ae4698",
+    "filelist_fingerprint": "dc4e5be8cc650f74a33c458c34a5078f22d54c0a7154caf474b9af45fed50266",
+    "rtl_fingerprint": "bc0117b15ed7684f5dc3b38294cc7c92183ccf8f89a52ec0d79f743ad7e14da6"
+  },
+  "generation": 35,
+  "hot_view": {
+    "body_available_blackboxes": [
+      "argmax_vector",
+      "causal_conv4",
+      "descriptor_dma_engine",
+      "kda_delta_head",
+      "kda_recurrence_contract",
+      "l2norm_q",
+      "matrix_qsz_buffer",
+      "mla_attention_head",
+      "mla_latent_stage",
+      "moe_shared_top2_contract",
+      "moe_top2_router",
+      "p16_tensor_loader",
+      "q4_embedding_lookup",
+      "q4_matvec_128x64",
+      "qsz_tensor_loader",
+      "residual_mix2",
+      "residual_mix2_contract",
+      "residual_mix2_scores",
+      "rmsnorm_q",
+      "sigmoid_pwl",
+      "silu_pwl",
+      "swiglu_expert"
+    ],
+    "conflicts": [],
+    "current_blackboxes": [
+      "argmax_vector",
+      "causal_conv4",
+      "descriptor_dma_engine",
+      "kda_delta_head",
+      "kda_recurrence_contract",
+      "l2norm_q",
+      "matrix_qsz_buffer",
+      "mla_attention_head",
+      "mla_latent_stage",
+      "moe_shared_top2_contract",
+      "moe_top2_router",
+      "p16_tensor_loader",
+      "q4_embedding_lookup",
+      "q4_matvec_128x64",
+      "qsz_tensor_loader",
+      "residual_mix2",
+      "residual_mix2_contract",
+      "residual_mix2_scores",
+      "rmsnorm_q",
+      "sigmoid_pwl",
+      "silu_pwl",
+      "softmax_vector_pwl",
+      "swiglu_expert"
+    ],
+    "cycle_id": 3,
+    "evidence_watermark": "b6ea7c2fa9b8d3e40d79e37fcc4ec829d832d9d7a3bcff5100a24bc924ae4698",
+    "expandable_blackboxes": [],
+    "fingerprints": {
+      "config_fingerprint": "20996de761e2d47880cec1cd87e28afd281b14de6496c342722e35e0ef3da1d1",
+      "evidence_watermark": "b6ea7c2fa9b8d3e40d79e37fcc4ec829d832d9d7a3bcff5100a24bc924ae4698",
+      "filelist_fingerprint": "dc4e5be8cc650f74a33c458c34a5078f22d54c0a7154caf474b9af45fed50266",
+      "rtl_fingerprint": "bc0117b15ed7684f5dc3b38294cc7c92183ccf8f89a52ec0d79f743ad7e14da6"
+    },
+    "generation": 35,
+    "hard_gate": "pass",
+    "mainline": {
+      "kind": "blackbox_expansion",
+      "status": "verification_pending",
+      "target": "q4_dequant_matvec_ch"
+    },
+    "module_summary": {
+      "activation_bank": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "argmax_vector": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "causal_conv4": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 870573.31,
+          "artifact": "runs/02_yosys_ppa--20260904-012009--23795/feedback.txt",
+          "artifact_sha256": "477e811a70bb512aeef83ff15f08d1ad076c9ca43d321ed96acd7a0555576328",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:causal_conv4:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1943.18,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-012009--23795:causal_conv4:477e811a70bb512a",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T18:10:30.539396+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-012009--23795",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "decay_from_sigmoid_mod": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 20622.71,
+          "artifact": "runs/02_yosys_ppa--20260904-012009--23795/feedback.txt",
+          "artifact_sha256": "477e811a70bb512aeef83ff15f08d1ad076c9ca43d321ed96acd7a0555576328",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:decay_from_sigmoid_mod:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 164461.17,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-012009--23795:decay_from_sigmoid_mod:477e811a70bb512a",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T18:10:30.539396+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-012009--23795",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "descriptor_dma_engine": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 271.32,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:qsz_tensor_loader:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 631.9,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:descriptor_dma_engine:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "descriptor_lookup": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 257872.11,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:descriptor_lookup:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 2404264960.0,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:descriptor_lookup:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "non_physical_artifact",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "dma_read16": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 1365.64,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:qsz_tensor_loader:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 3431.66,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:dma_read16:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "image_header_reader": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 1066.66,
+          "artifact": "runs/02_yosys_ppa--20260918-134823--75067/feedback.txt",
+          "artifact_sha256": "f81205c03c0296d8f83452f2e2aec4f5ab36b4c3978879f04663e4acc10b6e0c",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 382.0,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260918-134823--75067:image_header_reader:f81205c03c0296d8",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-18T07:59:10.749379+00:00",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260918-134823--75067",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "kda_delta_col": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 834909.06,
+          "artifact": "runs/02_yosys_ppa--20260904-012009--23795/feedback.txt",
+          "artifact_sha256": "477e811a70bb512aeef83ff15f08d1ad076c9ca43d321ed96acd7a0555576328",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:kda_delta_col:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 49487.25,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-012009--23795:kda_delta_col:477e811a70bb512a",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T18:10:30.539396+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-012009--23795",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "kda_delta_head": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "kda_recurrence_contract": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "l2norm_q": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 601661.69,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:l2norm_q:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 9388928.0,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:l2norm_q:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "non_physical_artifact",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "logit_writer": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 44560.32,
+          "artifact": "runs/02_yosys_ppa--20260918-134823--75067/feedback.txt",
+          "artifact_sha256": "f81205c03c0296d8f83452f2e2aec4f5ab36b4c3978879f04663e4acc10b6e0c",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1586.65,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260918-134823--75067:logit_writer:f81205c03c0296d8",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-18T07:59:10.749379+00:00",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260918-134823--75067",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "matrix_qsz_buffer": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 435713.06,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:matrix_qsz_buffer:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1110949.25,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:matrix_qsz_buffer:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "non_physical_artifact",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "mem_arbiter4": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 1908.55,
+          "artifact": "runs/02_yosys_ppa--20260918-134823--75067/feedback.txt",
+          "artifact_sha256": "f81205c03c0296d8f83452f2e2aec4f5ab36b4c3978879f04663e4acc10b6e0c",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 246.62,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260918-134823--75067:mem_arbiter4:f81205c03c0296d8",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-18T07:59:10.749379+00:00",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260918-134823--75067",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "mla_attention_head": {
+        "expansion_verified_once": true,
+        "integration_state": "temporarily_blackboxed",
+        "latest_measurement": {
+          "area_um2": 386066.0,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:mla_attention_head:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 287971.22,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:mla_attention_head:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": "verified",
+        "representation": "blackbox"
+      },
+      "mla_cache_attention_contract": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "mla_kv_cache": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "mla_latent_stage": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "moe_shared_top2_contract": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 525163.81,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:moe_shared_top2_contract:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 11632.57,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:moe_shared_top2_contract:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "moe_top2_router": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "nano_compute_fabric": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "nano_datapath_adapter": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "nano_decoder_top": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "nano_golden_datapath_adapter": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 765.02,
+          "artifact": "runs/02_yosys_ppa--20260918-134823--75067/feedback.txt",
+          "artifact_sha256": "f81205c03c0296d8f83452f2e2aec4f5ab36b4c3978879f04663e4acc10b6e0c",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 314.59,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260918-134823--75067:nano_golden_datapath_adapter:f81205c03c0296d8",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-18T07:59:10.749379+00:00",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260918-134823--75067",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "nano_golden_datapath_fsm": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 10194.72,
+          "artifact": "runs/02_yosys_ppa--20260910-224144--31805/feedback.txt",
+          "artifact_sha256": "996847c1b7cd6b11912e56ced18c1be7b35795b15f4ad87423ed45e0538b01bd",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:cp_fsm:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1347.25,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260910-224144--31805:nano_golden_datapath_fsm:996847c1b7cd6b11",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-10T15:14:07.302218+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260910-224144--31805",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "nano_golden_decoder_top": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 626.43,
+          "artifact": "runs/02_yosys_ppa--20260916-100849--83866/feedback.txt",
+          "artifact_sha256": "eddeda540d92ecab1531db4d52c4f9075f9ba870e4adc7a27bb7d62fb6821e83",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 415.22,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260916-100849--83866:nano_golden_decoder_top:eddeda540d92ecab",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-16T02:37:42.608256+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260916-100849--83866",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "nano_golden_microop_controller": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 571.63,
+          "artifact": "runs/02_yosys_ppa--20260918-134823--75067/feedback.txt",
+          "artifact_sha256": "f81205c03c0296d8f83452f2e2aec4f5ab36b4c3978879f04663e4acc10b6e0c",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 643.41,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260918-134823--75067:nano_golden_microop_controller:f81205c03c0296d8",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-18T07:59:10.749379+00:00",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260918-134823--75067",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "nano_token_controller": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "p16_tensor_loader": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 22284.68,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:p16_tensor_loader:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 430027.41,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:p16_tensor_loader:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "q4_dequant_matvec": {
+        "expansion_verified_once": true,
+        "integration_state": "integrated_verified",
+        "latest_measurement": null,
+        "latest_verification": "verified",
+        "representation": "rtl_body"
+      },
+      "q4_dequant_matvec_ch": {
+        "expansion_verified_once": true,
+        "integration_state": "measurement_incomplete",
+        "latest_measurement": {
+          "area_um2": 1552789.62,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:q4_dequant_matvec_ch:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 12257.54,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:q4_dequant_matvec_ch:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": "measurement_incomplete",
+        "representation": "rtl_body"
+      },
+      "q4_embedding_lookup": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "q4_matvec_128x64": {
+        "expansion_verified_once": true,
+        "integration_state": "temporarily_blackboxed",
+        "latest_measurement": {
+          "area_um2": 3677.18,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:q4_matvec_128x64:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 28.03,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:q4_matvec_128x64:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": "verified",
+        "representation": "blackbox"
+      },
+      "q4_matvec_dispatch": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "qsz_tensor_loader": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 569.51,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:qsz_tensor_loader:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1182.98,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:qsz_tensor_loader:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "residual_mix2": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "residual_mix2_contract": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 508552.62,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:residual_mix2_contract:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 10308.19,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:residual_mix2_contract:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "residual_mix2_scores": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "rmsnorm_q": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 1262060.62,
+          "artifact": "runs/02_yosys_ppa--20260904-012009--23795/feedback.txt",
+          "artifact_sha256": "477e811a70bb512aeef83ff15f08d1ad076c9ca43d321ed96acd7a0555576328",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:rmsnorm_q:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 8097164.5,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-012009--23795:rmsnorm_q:477e811a70bb512a",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T18:10:30.539396+00:00",
+          "path_class": "non_physical_artifact",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-012009--23795",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "sigmoid_from_q14_mod": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 4659.52,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:sigmoid_from_q14_mod:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 8053.43,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:sigmoid_from_q14_mod:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "rtl_body"
+      },
+      "sigmoid_pwl": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 4576.53,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:sigmoid_pwl:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 8027.82,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:sigmoid_pwl:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "silu_pwl": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 5710.75,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:silu_pwl:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 10603.67,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:silu_pwl:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "softmax_vector_pwl": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "swiglu_expert": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": {
+          "area_um2": 216625.34,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:swiglu_expert:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1479.42,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:swiglu_expert:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "latest_verification": null,
+        "representation": "blackbox"
+      },
+      "weight_stream_frontend": {
+        "expansion_verified_once": false,
+        "integration_state": "never_verified",
+        "latest_measurement": null,
+        "latest_verification": null,
+        "representation": "rtl_body"
+      }
+    },
+    "pending_transaction": {
+      "kind": "blackbox_expansion",
+      "module_id": "q4_dequant_matvec_ch",
+      "owner": "controller",
+      "partition": "top_level_sta",
+      "phase": "verification_pending"
+    },
+    "phase": "pre_decision",
+    "primary_partition": "top_level_sta",
+    "project_id": "doule_RTLharness",
+    "registry_status": "current",
+    "schema_version": 1,
+    "session_id": "20260918-183006-92411",
+    "verification_pending_modules": [
+      "q4_dequant_matvec_ch"
+    ]
+  },
+  "last_reconciliation": {
+    "cycle_id": 3,
+    "observed_at": "2026-09-18T21:29:45+08:00",
+    "phase": "pre_decision",
+    "project_id": "doule_RTLharness",
+    "reconciliation_id": "20260918-183006-92411:3:pre_decision:20996de761e2:dc4e5be8cc65:bc0117b15ed7:b6ea7c2fa9b8",
+    "session_id": "20260918-183006-92411"
+  },
+  "mainline": {
+    "kind": "blackbox_expansion",
+    "status": "verification_pending",
+    "target": "q4_dequant_matvec_ch"
+  },
+  "modules": {
+    "activation_bank": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "activation_bank",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "3168ff32e181b0cfb663c98bcc7c64ced392356f5b78fc85c7ffd958b95de880",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/activation_bank.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "argmax_vector": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "argmax_vector",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "393246a0bf1298aef0e6b14f7113ae45780f5eb15c77b1a42d582a6cdabecb27",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/argmax_vector.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "causal_conv4": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 5,
+        "latest": {
+          "area_um2": 870573.31,
+          "artifact": "runs/02_yosys_ppa--20260904-012009--23795/feedback.txt",
+          "artifact_sha256": "477e811a70bb512aeef83ff15f08d1ad076c9ca43d321ed96acd7a0555576328",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:causal_conv4:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1943.18,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-012009--23795:causal_conv4:477e811a70bb512a",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T18:10:30.539396+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-012009--23795",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:causal_conv4:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:causal_conv4:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:causal_conv4:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:causal_conv4:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260904-012009--23795:causal_conv4:477e811a70bb512a"
+        ]
+      },
+      "module_id": "causal_conv4",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "baee996e5e75705b1dc2983653a4082caff7af6b55232f03695e6cec3b1c1ea3",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/causal_conv4.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "decay_from_sigmoid_mod": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 5,
+        "latest": {
+          "area_um2": 20622.71,
+          "artifact": "runs/02_yosys_ppa--20260904-012009--23795/feedback.txt",
+          "artifact_sha256": "477e811a70bb512aeef83ff15f08d1ad076c9ca43d321ed96acd7a0555576328",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:decay_from_sigmoid_mod:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 164461.17,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-012009--23795:decay_from_sigmoid_mod:477e811a70bb512a",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T18:10:30.539396+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-012009--23795",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:decay_from_sigmoid_mod:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:decay_from_sigmoid_mod:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:decay_from_sigmoid_mod:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:decay_from_sigmoid_mod:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260904-012009--23795:decay_from_sigmoid_mod:477e811a70bb512a"
+        ]
+      },
+      "module_id": "decay_from_sigmoid_mod",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "8a396c1874a6233c2f9b89bf3f6cb7d80597303038b01d36972014e974b9bc55",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/kda_recurrence_contract.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "descriptor_dma_engine": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 271.32,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:qsz_tensor_loader:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 631.9,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:descriptor_dma_engine:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:descriptor_dma_engine:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:descriptor_dma_engine:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:descriptor_dma_engine:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:descriptor_dma_engine:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:descriptor_dma_engine:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:descriptor_dma_engine:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:descriptor_dma_engine:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "descriptor_dma_engine",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "25ca6d89e035ae3bef50e7c47628b07a14649ece41222dc72e42f1833dbceb09",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/descriptor_dma_engine.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "descriptor_lookup": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 257872.11,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:descriptor_lookup:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 2404264960.0,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:descriptor_lookup:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "non_physical_artifact",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:descriptor_lookup:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:descriptor_lookup:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:descriptor_lookup:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:descriptor_lookup:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:descriptor_lookup:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:descriptor_lookup:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:descriptor_lookup:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "descriptor_lookup",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "577e3cbb59bf8d456f503cdd804f503b0a9d411d3db36a13b0023ad3904b4289",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/descriptor_lookup.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "dma_read16": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 1365.64,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:qsz_tensor_loader:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 3431.66,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:dma_read16:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:dma_read16:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:dma_read16:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:dma_read16:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:dma_read16:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:dma_read16:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:dma_read16:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:dma_read16:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "dma_read16",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "e4e5bf0cb540d4a67be25ae19d200ea4b8ecba24318e9c746447c79a10eef8d7",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/dma_read16.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "image_header_reader": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 46,
+        "latest": {
+          "area_um2": 1066.66,
+          "artifact": "runs/02_yosys_ppa--20260918-134823--75067/feedback.txt",
+          "artifact_sha256": "f81205c03c0296d8f83452f2e2aec4f5ab36b4c3978879f04663e4acc10b6e0c",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 382.0,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260918-134823--75067:image_header_reader:f81205c03c0296d8",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-18T07:59:10.749379+00:00",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260918-134823--75067",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260910-120356--7174:image_header_reader:e00630290e7e747c",
+          "ppa:02_yosys_ppa--20260910-145422--13384:image_header_reader:5e43e38f7a131078",
+          "ppa:02_yosys_ppa--20260910-155335--16560:image_header_reader:1826781ee7e48104",
+          "ppa:02_yosys_ppa--20260910-203231--25109:image_header_reader:69721645dcc5ff53",
+          "ppa:02_yosys_ppa--20260910-235456--35930:image_header_reader:53aab8e3dd8ba7de",
+          "ppa:02_yosys_ppa--20260911-011543--38762:image_header_reader:7f3a8aad976fa7d4",
+          "ppa:02_yosys_ppa--20260911-020838--41149:image_header_reader:84e99d69bcb8defa",
+          "ppa:02_yosys_ppa--20260911-031448--46356:image_header_reader:4e2ae127b45e39c7",
+          "ppa:02_yosys_ppa--20260911-040702--49314:image_header_reader:a587376f2ebe6ec2",
+          "ppa:02_yosys_ppa--20260911-154947--67893:image_header_reader:9460c43b309c01e7",
+          "ppa:02_yosys_ppa--20260911-170721--71840:image_header_reader:7e48f6dbe0e59aa9",
+          "ppa:02_yosys_ppa--20260914-154330--22759:image_header_reader:0936d3b74d6467c4",
+          "ppa:02_yosys_ppa--20260914-174814--29822:image_header_reader:fabdcff9449a3066",
+          "ppa:02_yosys_ppa--20260916-091054--77242:image_header_reader:3e566864dca29be2",
+          "ppa:02_yosys_ppa--20260916-100849--83866:image_header_reader:eddeda540d92ecab",
+          "ppa:02_yosys_ppa--20260918-134823--75067:image_header_reader:f81205c03c0296d8"
+        ]
+      },
+      "module_id": "image_header_reader",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "686a232a47d06009daf373de2b3a6e8eeccb4f2ee32b8e2ce5c480cb6190fd74",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/image_header_reader.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "kda_delta_col": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 5,
+        "latest": {
+          "area_um2": 834909.06,
+          "artifact": "runs/02_yosys_ppa--20260904-012009--23795/feedback.txt",
+          "artifact_sha256": "477e811a70bb512aeef83ff15f08d1ad076c9ca43d321ed96acd7a0555576328",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:kda_delta_col:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 49487.25,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-012009--23795:kda_delta_col:477e811a70bb512a",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T18:10:30.539396+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-012009--23795",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:kda_delta_col:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:kda_delta_col:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:kda_delta_col:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:kda_delta_col:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260904-012009--23795:kda_delta_col:477e811a70bb512a"
+        ]
+      },
+      "module_id": "kda_delta_col",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "be5ed8500561dd141f14683eef9ddc1e401294c5fdcaee7415e2a7db0bc8b809",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/kda_delta_col.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "kda_delta_head": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "kda_delta_head",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "2d825a4441a0c9d703f164a55d63cf0574e1df000fd4c2a816418d597d023eb4",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/kda_delta_head.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "kda_recurrence_contract": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "kda_recurrence_contract",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "8a396c1874a6233c2f9b89bf3f6cb7d80597303038b01d36972014e974b9bc55",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/kda_recurrence_contract.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "l2norm_q": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 601661.69,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:l2norm_q:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 9388928.0,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:l2norm_q:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "non_physical_artifact",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:l2norm_q:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:l2norm_q:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:l2norm_q:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:l2norm_q:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:l2norm_q:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:l2norm_q:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:l2norm_q:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "l2norm_q",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "d94ebe0efc8d874fe34f3d194d37fa112b3466011a246825d480a52274c5cf79",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/l2norm_q.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "logit_writer": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 47,
+        "latest": {
+          "area_um2": 44560.32,
+          "artifact": "runs/02_yosys_ppa--20260918-134823--75067/feedback.txt",
+          "artifact_sha256": "f81205c03c0296d8f83452f2e2aec4f5ab36b4c3978879f04663e4acc10b6e0c",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1586.65,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260918-134823--75067:logit_writer:f81205c03c0296d8",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-18T07:59:10.749379+00:00",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260918-134823--75067",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260910-141101--11147:logit_writer:ad5e57a3b284bb1f",
+          "ppa:02_yosys_ppa--20260910-145422--13384:logit_writer:5e43e38f7a131078",
+          "ppa:02_yosys_ppa--20260910-155335--16560:logit_writer:1826781ee7e48104",
+          "ppa:02_yosys_ppa--20260910-203231--25109:logit_writer:69721645dcc5ff53",
+          "ppa:02_yosys_ppa--20260910-235456--35930:logit_writer:53aab8e3dd8ba7de",
+          "ppa:02_yosys_ppa--20260911-011543--38762:logit_writer:7f3a8aad976fa7d4",
+          "ppa:02_yosys_ppa--20260911-020838--41149:logit_writer:84e99d69bcb8defa",
+          "ppa:02_yosys_ppa--20260911-031448--46356:logit_writer:4e2ae127b45e39c7",
+          "ppa:02_yosys_ppa--20260911-040702--49314:logit_writer:a587376f2ebe6ec2",
+          "ppa:02_yosys_ppa--20260911-154947--67893:logit_writer:9460c43b309c01e7",
+          "ppa:02_yosys_ppa--20260911-170721--71840:logit_writer:7e48f6dbe0e59aa9",
+          "ppa:02_yosys_ppa--20260914-154330--22759:logit_writer:0936d3b74d6467c4",
+          "ppa:02_yosys_ppa--20260914-174814--29822:logit_writer:fabdcff9449a3066",
+          "ppa:02_yosys_ppa--20260916-091054--77242:logit_writer:3e566864dca29be2",
+          "ppa:02_yosys_ppa--20260916-100849--83866:logit_writer:eddeda540d92ecab",
+          "ppa:02_yosys_ppa--20260918-134823--75067:logit_writer:f81205c03c0296d8"
+        ]
+      },
+      "module_id": "logit_writer",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "6063caeeb9dbcac1d0a29de037ebca5e5cc0b1d43488fcb859ce93052ce23973",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/logit_writer.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "matrix_qsz_buffer": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 435713.06,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:matrix_qsz_buffer:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1110949.25,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:matrix_qsz_buffer:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "non_physical_artifact",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:matrix_qsz_buffer:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:matrix_qsz_buffer:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:matrix_qsz_buffer:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:matrix_qsz_buffer:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:matrix_qsz_buffer:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:matrix_qsz_buffer:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:matrix_qsz_buffer:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "matrix_qsz_buffer",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "c417af1eb64b19d96eae534564c87b64b9bdfad9021cf27cc00ea55bd753b46b",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/matrix_qsz_buffer.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "mem_arbiter4": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 47,
+        "latest": {
+          "area_um2": 1908.55,
+          "artifact": "runs/02_yosys_ppa--20260918-134823--75067/feedback.txt",
+          "artifact_sha256": "f81205c03c0296d8f83452f2e2aec4f5ab36b4c3978879f04663e4acc10b6e0c",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 246.62,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260918-134823--75067:mem_arbiter4:f81205c03c0296d8",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-18T07:59:10.749379+00:00",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260918-134823--75067",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260910-120356--7174:mem_arbiter4:e00630290e7e747c",
+          "ppa:02_yosys_ppa--20260910-145422--13384:mem_arbiter4:5e43e38f7a131078",
+          "ppa:02_yosys_ppa--20260910-155335--16560:mem_arbiter4:1826781ee7e48104",
+          "ppa:02_yosys_ppa--20260910-203231--25109:mem_arbiter4:69721645dcc5ff53",
+          "ppa:02_yosys_ppa--20260910-235456--35930:mem_arbiter4:53aab8e3dd8ba7de",
+          "ppa:02_yosys_ppa--20260911-011543--38762:mem_arbiter4:7f3a8aad976fa7d4",
+          "ppa:02_yosys_ppa--20260911-020838--41149:mem_arbiter4:84e99d69bcb8defa",
+          "ppa:02_yosys_ppa--20260911-031448--46356:mem_arbiter4:4e2ae127b45e39c7",
+          "ppa:02_yosys_ppa--20260911-040702--49314:mem_arbiter4:a587376f2ebe6ec2",
+          "ppa:02_yosys_ppa--20260911-154947--67893:mem_arbiter4:9460c43b309c01e7",
+          "ppa:02_yosys_ppa--20260911-170721--71840:mem_arbiter4:7e48f6dbe0e59aa9",
+          "ppa:02_yosys_ppa--20260914-154330--22759:mem_arbiter4:0936d3b74d6467c4",
+          "ppa:02_yosys_ppa--20260914-174814--29822:mem_arbiter4:fabdcff9449a3066",
+          "ppa:02_yosys_ppa--20260916-091054--77242:mem_arbiter4:3e566864dca29be2",
+          "ppa:02_yosys_ppa--20260916-100849--83866:mem_arbiter4:eddeda540d92ecab",
+          "ppa:02_yosys_ppa--20260918-134823--75067:mem_arbiter4:f81205c03c0296d8"
+        ]
+      },
+      "module_id": "mem_arbiter4",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "bf4e7d983d7ce39a6f616bb2b329fb0a16f0c271e8f4cd1d91652ae9b7800ccd",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/mem_arbiter4.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "mla_attention_head": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "temporarily_blackboxed",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 386066.0,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:mla_attention_head:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 287971.22,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:mla_attention_head:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:mla_attention_head:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:mla_attention_head:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:mla_attention_head:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:mla_attention_head:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:mla_attention_head:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:mla_attention_head:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:mla_attention_head:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "mla_attention_head",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "f1d2a76f1425c3e796a9af146e7d7fa627727216aefac1e1c6917a0476db117c",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/mla_attention_head.sv",
+        "variant_key": "default"
+      },
+      "verification": {
+        "evidence_ids": [
+          "expansion:agent-02_yosys_ppa--20260911-152102--expansion-mla_attention_head:768dc5f66d5c03b5"
+        ],
+        "expansion_verified_once": true,
+        "first_verified": {
+          "artifact": "runs/agent-02_yosys_ppa--20260911-152102--expansion-mla_attention_head/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260911-152102--expansion-mla_attention_head:768dc5f66d5c03b5",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-11T08:17:28.300259+00:00",
+          "ppa_exit": 0,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260911-152102--expansion-mla_attention_head",
+          "sha256": "768dc5f66d5c03b5b763c8e311c6912b64d5e74a0f83b344756453ec521a5932",
+          "sta_link_result": "未测得",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        },
+        "latest_expansion_attempt": {
+          "artifact": "runs/agent-02_yosys_ppa--20260911-152102--expansion-mla_attention_head/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260911-152102--expansion-mla_attention_head:768dc5f66d5c03b5",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-11T08:17:28.300259+00:00",
+          "ppa_exit": 0,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260911-152102--expansion-mla_attention_head",
+          "sha256": "768dc5f66d5c03b5b763c8e311c6912b64d5e74a0f83b344756453ec521a5932",
+          "sta_link_result": "未测得",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        },
+        "latest_verified": {
+          "artifact": "runs/agent-02_yosys_ppa--20260911-152102--expansion-mla_attention_head/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260911-152102--expansion-mla_attention_head:768dc5f66d5c03b5",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-11T08:17:28.300259+00:00",
+          "ppa_exit": 0,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260911-152102--expansion-mla_attention_head",
+          "sha256": "768dc5f66d5c03b5b763c8e311c6912b64d5e74a0f83b344756453ec521a5932",
+          "sta_link_result": "未测得",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        }
+      }
+    },
+    "mla_cache_attention_contract": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "mla_cache_attention_contract",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "2d6a06ec0d2a80da6d4a11821423d9e003fc840bbe5189b03a1fd37b8ae8415d",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/mla_cache_attention_contract.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "mla_kv_cache": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "mla_kv_cache",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "72892c087b915cdd2e509d78d081c60fdb50c8ff497655a732f4d661cbd753ed",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/mla_kv_cache.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "mla_latent_stage": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "mla_latent_stage",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "587b191632debd08b49c1b428c3abcd3acaf1c96dc1f29ef2ebcba957ecf8bde",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/mla_latent_stage.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "moe_shared_top2_contract": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 525163.81,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:moe_shared_top2_contract:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 11632.57,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:moe_shared_top2_contract:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:moe_shared_top2_contract:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:moe_shared_top2_contract:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:moe_shared_top2_contract:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:moe_shared_top2_contract:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:moe_shared_top2_contract:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:moe_shared_top2_contract:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:moe_shared_top2_contract:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "moe_shared_top2_contract",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "8244ca1b9153d537af75b2aa8e0593f3addc89717207ed930e31fdbb8ba7f3e7",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/moe_shared_top2_contract.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "moe_top2_router": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "moe_top2_router",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "591eb7c2a862be671a84b89b671430d11ab0c6ebdf2c41fd175c3fadfd3b5458",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/moe_top2_router.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "nano_compute_fabric": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "nano_compute_fabric",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "d21f48688c8417dfd15129be0c8c909b1b465a23e442de4cfb73f0302b7cc760",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/nano_compute_fabric.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "nano_datapath_adapter": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "nano_datapath_adapter",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "69a0d310f1b3a0e48613b15f784960e982c5ec45fe17cc07fc49b9d399ac23cb",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/nano_datapath_adapter.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "nano_decoder_top": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "nano_decoder_top",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "bb4e2058253d770bda3f676f8e365df97f3be393f997ee445a9f71c788221ff9",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/nano_decoder_top.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "nano_golden_datapath_adapter": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 46,
+        "latest": {
+          "area_um2": 765.02,
+          "artifact": "runs/02_yosys_ppa--20260918-134823--75067/feedback.txt",
+          "artifact_sha256": "f81205c03c0296d8f83452f2e2aec4f5ab36b4c3978879f04663e4acc10b6e0c",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 314.59,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260918-134823--75067:nano_golden_datapath_adapter:f81205c03c0296d8",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-18T07:59:10.749379+00:00",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260918-134823--75067",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260910-120356--7174:nano_golden_datapath_adapter:e00630290e7e747c",
+          "ppa:02_yosys_ppa--20260910-145422--13384:nano_golden_datapath_adapter:5e43e38f7a131078",
+          "ppa:02_yosys_ppa--20260910-155335--16560:nano_golden_datapath_adapter:1826781ee7e48104",
+          "ppa:02_yosys_ppa--20260910-203231--25109:nano_golden_datapath_adapter:69721645dcc5ff53",
+          "ppa:02_yosys_ppa--20260910-235456--35930:nano_golden_datapath_adapter:53aab8e3dd8ba7de",
+          "ppa:02_yosys_ppa--20260911-011543--38762:nano_golden_datapath_adapter:7f3a8aad976fa7d4",
+          "ppa:02_yosys_ppa--20260911-020838--41149:nano_golden_datapath_adapter:84e99d69bcb8defa",
+          "ppa:02_yosys_ppa--20260911-031448--46356:nano_golden_datapath_adapter:4e2ae127b45e39c7",
+          "ppa:02_yosys_ppa--20260911-040702--49314:nano_golden_datapath_adapter:a587376f2ebe6ec2",
+          "ppa:02_yosys_ppa--20260911-154947--67893:nano_golden_datapath_adapter:9460c43b309c01e7",
+          "ppa:02_yosys_ppa--20260911-170721--71840:nano_golden_datapath_adapter:7e48f6dbe0e59aa9",
+          "ppa:02_yosys_ppa--20260914-154330--22759:nano_golden_datapath_adapter:0936d3b74d6467c4",
+          "ppa:02_yosys_ppa--20260914-174814--29822:nano_golden_datapath_adapter:fabdcff9449a3066",
+          "ppa:02_yosys_ppa--20260916-091054--77242:nano_golden_datapath_adapter:3e566864dca29be2",
+          "ppa:02_yosys_ppa--20260916-100849--83866:nano_golden_datapath_adapter:eddeda540d92ecab",
+          "ppa:02_yosys_ppa--20260918-134823--75067:nano_golden_datapath_adapter:f81205c03c0296d8"
+        ]
+      },
+      "module_id": "nano_golden_datapath_adapter",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "59e87d7407f829b8b32847aeff5bf71454acad06c2cb6f98fb89ff7055606652",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/nano_golden_datapath_adapter.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "nano_golden_datapath_fsm": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 13,
+        "latest": {
+          "area_um2": 10194.72,
+          "artifact": "runs/02_yosys_ppa--20260910-224144--31805/feedback.txt",
+          "artifact_sha256": "996847c1b7cd6b11912e56ced18c1be7b35795b15f4ad87423ed45e0538b01bd",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:cp_fsm:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1347.25,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260910-224144--31805:nano_golden_datapath_fsm:996847c1b7cd6b11",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-10T15:14:07.302218+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260910-224144--31805",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:nano_golden_datapath_fsm:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:nano_golden_datapath_fsm:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:nano_golden_datapath_fsm:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:nano_golden_datapath_fsm:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:nano_golden_datapath_fsm:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:nano_golden_datapath_fsm:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:nano_golden_datapath_fsm:eebd64eb1e2201bb",
+          "ppa:02_yosys_ppa--20260904-065616--47494:nano_golden_datapath_fsm:828c3ef751fe1cb5",
+          "ppa:02_yosys_ppa--20260904-095632--58705:nano_golden_datapath_fsm:4c3ac68477928e92",
+          "ppa:02_yosys_ppa--20260907-181254--7748:nano_golden_datapath_fsm:fded95d87216742c",
+          "ppa:02_yosys_ppa--20260907-230157--18267:nano_golden_datapath_fsm:662554c7bb0c4be4",
+          "ppa:02_yosys_ppa--20260910-155335--16560:nano_golden_datapath_fsm:1826781ee7e48104",
+          "ppa:02_yosys_ppa--20260910-224144--31805:nano_golden_datapath_fsm:996847c1b7cd6b11"
+        ]
+      },
+      "module_id": "nano_golden_datapath_fsm",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "69ce484f1215206a058e9b78a1ada19993c7dff2c4925ebce5c9c8d73e393169",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/nano_golden_datapath_fsm.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "nano_golden_decoder_top": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 47,
+        "latest": {
+          "area_um2": 626.43,
+          "artifact": "runs/02_yosys_ppa--20260916-100849--83866/feedback.txt",
+          "artifact_sha256": "eddeda540d92ecab1531db4d52c4f9075f9ba870e4adc7a27bb7d62fb6821e83",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 415.22,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260916-100849--83866:nano_golden_decoder_top:eddeda540d92ecab",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-16T02:37:42.608256+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260916-100849--83866",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260910-120356--7174:nano_golden_decoder_top:e00630290e7e747c",
+          "ppa:02_yosys_ppa--20260910-145422--13384:nano_golden_decoder_top:5e43e38f7a131078",
+          "ppa:02_yosys_ppa--20260910-155335--16560:nano_golden_decoder_top:1826781ee7e48104",
+          "ppa:02_yosys_ppa--20260910-203231--25109:nano_golden_decoder_top:69721645dcc5ff53",
+          "ppa:02_yosys_ppa--20260910-212823--27779:nano_golden_decoder_top:de2d4d2a02c4c287",
+          "ppa:02_yosys_ppa--20260910-235456--35930:nano_golden_decoder_top:53aab8e3dd8ba7de",
+          "ppa:02_yosys_ppa--20260911-011543--38762:nano_golden_decoder_top:7f3a8aad976fa7d4",
+          "ppa:02_yosys_ppa--20260911-020838--41149:nano_golden_decoder_top:84e99d69bcb8defa",
+          "ppa:02_yosys_ppa--20260911-031448--46356:nano_golden_decoder_top:4e2ae127b45e39c7",
+          "ppa:02_yosys_ppa--20260911-040702--49314:nano_golden_decoder_top:a587376f2ebe6ec2",
+          "ppa:02_yosys_ppa--20260911-154947--67893:nano_golden_decoder_top:9460c43b309c01e7",
+          "ppa:02_yosys_ppa--20260911-170721--71840:nano_golden_decoder_top:7e48f6dbe0e59aa9",
+          "ppa:02_yosys_ppa--20260914-154330--22759:nano_golden_decoder_top:0936d3b74d6467c4",
+          "ppa:02_yosys_ppa--20260914-174814--29822:nano_golden_decoder_top:fabdcff9449a3066",
+          "ppa:02_yosys_ppa--20260916-091054--77242:nano_golden_decoder_top:3e566864dca29be2",
+          "ppa:02_yosys_ppa--20260916-100849--83866:nano_golden_decoder_top:eddeda540d92ecab"
+        ]
+      },
+      "module_id": "nano_golden_decoder_top",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "fc93a22fac9d324c68c2e1e5734cba8aaa562aa4446be36bc5692c43b8f56fad",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/nano_golden_decoder_top.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "nano_golden_microop_controller": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 46,
+        "latest": {
+          "area_um2": 571.63,
+          "artifact": "runs/02_yosys_ppa--20260918-134823--75067/feedback.txt",
+          "artifact_sha256": "f81205c03c0296d8f83452f2e2aec4f5ab36b4c3978879f04663e4acc10b6e0c",
+          "attribution_quality": "reported_module",
+          "comparability_key": "yosys_abc:Nangate45:typical:top_level_sta:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 643.41,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260918-134823--75067:nano_golden_microop_controller:f81205c03c0296d8",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-18T07:59:10.749379+00:00",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260918-134823--75067",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260910-120356--7174:nano_golden_microop_controller:e00630290e7e747c",
+          "ppa:02_yosys_ppa--20260910-145422--13384:nano_golden_microop_controller:5e43e38f7a131078",
+          "ppa:02_yosys_ppa--20260910-155335--16560:nano_golden_microop_controller:1826781ee7e48104",
+          "ppa:02_yosys_ppa--20260910-203231--25109:nano_golden_microop_controller:69721645dcc5ff53",
+          "ppa:02_yosys_ppa--20260910-235456--35930:nano_golden_microop_controller:53aab8e3dd8ba7de",
+          "ppa:02_yosys_ppa--20260911-011543--38762:nano_golden_microop_controller:7f3a8aad976fa7d4",
+          "ppa:02_yosys_ppa--20260911-020838--41149:nano_golden_microop_controller:84e99d69bcb8defa",
+          "ppa:02_yosys_ppa--20260911-031448--46356:nano_golden_microop_controller:4e2ae127b45e39c7",
+          "ppa:02_yosys_ppa--20260911-040702--49314:nano_golden_microop_controller:a587376f2ebe6ec2",
+          "ppa:02_yosys_ppa--20260911-154947--67893:nano_golden_microop_controller:9460c43b309c01e7",
+          "ppa:02_yosys_ppa--20260911-170721--71840:nano_golden_microop_controller:7e48f6dbe0e59aa9",
+          "ppa:02_yosys_ppa--20260914-154330--22759:nano_golden_microop_controller:0936d3b74d6467c4",
+          "ppa:02_yosys_ppa--20260914-174814--29822:nano_golden_microop_controller:fabdcff9449a3066",
+          "ppa:02_yosys_ppa--20260916-091054--77242:nano_golden_microop_controller:3e566864dca29be2",
+          "ppa:02_yosys_ppa--20260916-100849--83866:nano_golden_microop_controller:eddeda540d92ecab",
+          "ppa:02_yosys_ppa--20260918-134823--75067:nano_golden_microop_controller:f81205c03c0296d8"
+        ]
+      },
+      "module_id": "nano_golden_microop_controller",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "6a27c195ad766f35438dcc9853eb00babc1fc34b4f726c041baa708e8bba0767",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/nano_golden_microop_controller.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "nano_token_controller": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "nano_token_controller",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "cdc5287f0690a5c3fb71c465f6c7a82f511dc3a34c852612e89ca37655255b13",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/nano_token_controller.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "p16_tensor_loader": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 22284.68,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:p16_tensor_loader:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 430027.41,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:p16_tensor_loader:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "registered_path",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:p16_tensor_loader:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:p16_tensor_loader:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:p16_tensor_loader:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:p16_tensor_loader:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:p16_tensor_loader:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:p16_tensor_loader:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:p16_tensor_loader:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "p16_tensor_loader",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "571d05ccbcfc6c1a39371466ef5d264399f0669fec7f826cadbdadc6d4e4fa6a",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/p16_tensor_loader.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "q4_dequant_matvec": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm"
+        ],
+        "integration_state": "integrated_verified",
+        "top_level_acceptance_pending": false
+      },
+      "measurements": {},
+      "module_id": "q4_dequant_matvec",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "4708b34d7f0f6a6c4478ec244cf707d4078ff457ee2c9f860701a2c94e932c55",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/q4_dequant_matvec.sv",
+        "variant_key": "default"
+      },
+      "verification": {
+        "evidence_ids": [
+          "expansion:agent-02_yosys_ppa--20260914-181948--expansion-q4_dequant_matvec:85bf6c1d560e6d44",
+          "expansion:agent-02_yosys_ppa--20260916-093949--expansion-q4_dequant_matvec:22352cbeaef6848f"
+        ],
+        "expansion_verified_once": true,
+        "first_verified": {
+          "artifact": "runs/agent-02_yosys_ppa--20260916-093949--expansion-q4_dequant_matvec/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260916-093949--expansion-q4_dequant_matvec:22352cbeaef6848f",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-16T02:37:43.647599+00:00",
+          "ppa_exit": 0,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260916-093949--expansion-q4_dequant_matvec",
+          "sha256": "22352cbeaef6848ff8dec8ee9d7515ee49052a22e9e1d14f00dc5714961cd5cb",
+          "sta_link_result": "ok",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        },
+        "latest_expansion_attempt": {
+          "artifact": "runs/agent-02_yosys_ppa--20260916-093949--expansion-q4_dequant_matvec/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260916-093949--expansion-q4_dequant_matvec:22352cbeaef6848f",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-16T02:37:43.647599+00:00",
+          "ppa_exit": 0,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260916-093949--expansion-q4_dequant_matvec",
+          "sha256": "22352cbeaef6848ff8dec8ee9d7515ee49052a22e9e1d14f00dc5714961cd5cb",
+          "sta_link_result": "ok",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        },
+        "latest_verified": {
+          "artifact": "runs/agent-02_yosys_ppa--20260916-093949--expansion-q4_dequant_matvec/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260916-093949--expansion-q4_dequant_matvec:22352cbeaef6848f",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-16T02:37:43.647599+00:00",
+          "ppa_exit": 0,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260916-093949--expansion-q4_dequant_matvec",
+          "sha256": "22352cbeaef6848ff8dec8ee9d7515ee49052a22e9e1d14f00dc5714961cd5cb",
+          "sta_link_result": "ok",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        }
+      }
+    },
+    "q4_dequant_matvec_ch": {
+      "derived": {
+        "can_expand_partitions": [
+          "cp_fsm"
+        ],
+        "currently_blackboxed_partitions": [
+          "cp_fsm"
+        ],
+        "integration_state": "measurement_incomplete",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 1552789.62,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:q4_dequant_matvec_ch:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 12257.54,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:q4_dequant_matvec_ch:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:q4_dequant_matvec_ch:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:q4_dequant_matvec_ch:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:q4_dequant_matvec_ch:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:q4_dequant_matvec_ch:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:q4_dequant_matvec_ch:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:q4_dequant_matvec_ch:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:q4_dequant_matvec_ch:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "q4_dequant_matvec_ch",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "4708b34d7f0f6a6c4478ec244cf707d4078ff457ee2c9f860701a2c94e932c55",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/q4_dequant_matvec.sv",
+        "variant_key": "default"
+      },
+      "verification": {
+        "evidence_ids": [
+          "expansion:agent-02_yosys_ppa--20260914-171924--expansion-q4_dequant_matvec_ch:088eb468def905d2",
+          "expansion:agent-02_yosys_ppa--20260916-103934--expansion-q4_dequant_matvec_ch:3b4f7a668935c052",
+          "expansion:agent-02_yosys_ppa--20260917-161411--expansion-q4_dequant_matvec_ch:490974dde46c9c98",
+          "expansion:agent-02_yosys_ppa--20260918-183123--expansion-q4_dequant_matvec_ch:2e132577d190fcf5"
+        ],
+        "expansion_verified_once": true,
+        "first_verified": {
+          "artifact": "runs/agent-02_yosys_ppa--20260914-171924--expansion-q4_dequant_matvec_ch/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260914-171924--expansion-q4_dequant_matvec_ch:088eb468def905d2",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-14T10:18:00.387154+00:00",
+          "ppa_exit": 0,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260914-171924--expansion-q4_dequant_matvec_ch",
+          "sha256": "088eb468def905d28de89ecc9740eaee3f7a695cb1863208b4337723521d7890",
+          "sta_link_result": "ok",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        },
+        "latest_expansion_attempt": {
+          "artifact": "runs/agent-02_yosys_ppa--20260918-183123--expansion-q4_dequant_matvec_ch/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260918-183123--expansion-q4_dequant_matvec_ch:2e132577d190fcf5",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-18T13:27:29.521331+00:00",
+          "ppa_exit": 124,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260918-183123--expansion-q4_dequant_matvec_ch",
+          "sha256": "2e132577d190fcf5ae2dd09cd07d65141442682ef172486bccff539f22776aad",
+          "sta_link_result": "未测得",
+          "sta_status": "not_attempted",
+          "sta_timing_measured": false,
+          "status": "measurement_incomplete"
+        },
+        "latest_verified": {
+          "artifact": "runs/agent-02_yosys_ppa--20260914-171924--expansion-q4_dequant_matvec_ch/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260914-171924--expansion-q4_dequant_matvec_ch:088eb468def905d2",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-14T10:18:00.387154+00:00",
+          "ppa_exit": 0,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260914-171924--expansion-q4_dequant_matvec_ch",
+          "sha256": "088eb468def905d28de89ecc9740eaee3f7a695cb1863208b4337723521d7890",
+          "sta_link_result": "ok",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        }
+      }
+    },
+    "q4_embedding_lookup": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "q4_embedding_lookup",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "4f9dc68eb9fd44df1ba5f8d04d74126233c0e011cb2010c50766153adc9819fe",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/q4_embedding_lookup.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "q4_matvec_128x64": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "temporarily_blackboxed",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 3677.18,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:q4_matvec_128x64:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 28.03,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:q4_matvec_128x64:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:q4_matvec_128x64:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:q4_matvec_128x64:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:q4_matvec_128x64:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:q4_matvec_128x64:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:q4_matvec_128x64:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:q4_matvec_128x64:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:q4_matvec_128x64:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "q4_matvec_128x64",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "3c7f50401166b4c82d3bc810ae0816e566db3d83f061c9e74133ebade94d7fc0",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/q4_matvec_128x64.sv",
+        "variant_key": "default"
+      },
+      "verification": {
+        "evidence_ids": [
+          "expansion:agent-02_yosys_ppa--20260914-151434--expansion-q4_matvec_128x64:06caf9f551c859a5"
+        ],
+        "expansion_verified_once": true,
+        "first_verified": {
+          "artifact": "runs/agent-02_yosys_ppa--20260914-151434--expansion-q4_matvec_128x64/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260914-151434--expansion-q4_matvec_128x64:06caf9f551c859a5",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-14T08:13:57.677692+00:00",
+          "ppa_exit": 124,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260914-151434--expansion-q4_matvec_128x64",
+          "sha256": "06caf9f551c859a5237c8e6eba4e981773e614c87681d216cca135c0c27b2553",
+          "sta_link_result": "ok",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        },
+        "latest_expansion_attempt": {
+          "artifact": "runs/agent-02_yosys_ppa--20260914-151434--expansion-q4_matvec_128x64/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260914-151434--expansion-q4_matvec_128x64:06caf9f551c859a5",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-14T08:13:57.677692+00:00",
+          "ppa_exit": 124,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260914-151434--expansion-q4_matvec_128x64",
+          "sha256": "06caf9f551c859a5237c8e6eba4e981773e614c87681d216cca135c0c27b2553",
+          "sta_link_result": "ok",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        },
+        "latest_verified": {
+          "artifact": "runs/agent-02_yosys_ppa--20260914-151434--expansion-q4_matvec_128x64/result.json",
+          "evidence_id": "expansion:agent-02_yosys_ppa--20260914-151434--expansion-q4_matvec_128x64:06caf9f551c859a5",
+          "functional_passed": true,
+          "measurement_scope": "PARTIAL_HIERARCHICAL",
+          "observed_at": "2026-09-14T08:13:57.677692+00:00",
+          "ppa_exit": 124,
+          "preflight_passed": true,
+          "run_id": "agent-02_yosys_ppa--20260914-151434--expansion-q4_matvec_128x64",
+          "sha256": "06caf9f551c859a5237c8e6eba4e981773e614c87681d216cca135c0c27b2553",
+          "sta_link_result": "ok",
+          "sta_status": "partial",
+          "sta_timing_measured": true,
+          "status": "verified"
+        }
+      }
+    },
+    "q4_matvec_dispatch": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "q4_matvec_dispatch",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "841acf15b901f41e06004b8a5f6d77dc3a3aa4c10c0f844dfe478e5f79e70bb7",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/q4_matvec_dispatch.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "qsz_tensor_loader": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 569.51,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:qsz_tensor_loader:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1182.98,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:qsz_tensor_loader:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:qsz_tensor_loader:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:qsz_tensor_loader:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:qsz_tensor_loader:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:qsz_tensor_loader:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:qsz_tensor_loader:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:qsz_tensor_loader:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:qsz_tensor_loader:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "qsz_tensor_loader",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "f81f428f099fab00dcbaba63b48d4fb7fb478dde0147478ad4a014e9eeca34d2",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/qsz_tensor_loader.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "residual_mix2": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "residual_mix2",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "99f43e32f67fced12aa732be4b6d697882c699c32655e1b8ad076e1eb51194c4",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/residual_mix2.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "residual_mix2_contract": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 508552.62,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:residual_mix2_contract:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 10308.19,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:residual_mix2_contract:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:residual_mix2_contract:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:residual_mix2_contract:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:residual_mix2_contract:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:residual_mix2_contract:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:residual_mix2_contract:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:residual_mix2_contract:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:residual_mix2_contract:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "residual_mix2_contract",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "ec5beb419dd4cb22496daaa3bce231e8c107a5423e0b68fcf3f4d5d809c4dee6",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/residual_mix2_contract.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "residual_mix2_scores": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "residual_mix2_scores",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "6385e8e191348e0ef694ccceba56235e870b8464f7d01b56551fa48dfd85523c",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/residual_mix2_scores.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "rmsnorm_q": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 5,
+        "latest": {
+          "area_um2": 1262060.62,
+          "artifact": "runs/02_yosys_ppa--20260904-012009--23795/feedback.txt",
+          "artifact_sha256": "477e811a70bb512aeef83ff15f08d1ad076c9ca43d321ed96acd7a0555576328",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:rmsnorm_q:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 8097164.5,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-012009--23795:rmsnorm_q:477e811a70bb512a",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T18:10:30.539396+00:00",
+          "path_class": "non_physical_artifact",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-012009--23795",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:rmsnorm_q:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:rmsnorm_q:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:rmsnorm_q:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:rmsnorm_q:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260904-012009--23795:rmsnorm_q:477e811a70bb512a"
+        ]
+      },
+      "module_id": "rmsnorm_q",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "3acb8bffb8c984094b6f0bcbe0884213ae779c44325db18a2ce1eb1258edf93a",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/rmsnorm_q.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "sigmoid_from_q14_mod": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 4659.52,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:sigmoid_from_q14_mod:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 8053.43,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:sigmoid_from_q14_mod:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:sigmoid_from_q14_mod:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:sigmoid_from_q14_mod:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:sigmoid_from_q14_mod:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:sigmoid_from_q14_mod:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:sigmoid_from_q14_mod:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:sigmoid_from_q14_mod:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:sigmoid_from_q14_mod:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "sigmoid_from_q14_mod",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "8a396c1874a6233c2f9b89bf3f6cb7d80597303038b01d36972014e974b9bc55",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/kda_recurrence_contract.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "sigmoid_pwl": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 4576.53,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:sigmoid_pwl:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 8027.82,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:sigmoid_pwl:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:sigmoid_pwl:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:sigmoid_pwl:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:sigmoid_pwl:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:sigmoid_pwl:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:sigmoid_pwl:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:sigmoid_pwl:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:sigmoid_pwl:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "sigmoid_pwl",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "80dcdf4ee8e5f5e3822681a183daaa390a8c8152f70d76201743cd0200f27f10",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/sigmoid_pwl.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "silu_pwl": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 5710.75,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:silu_pwl:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 10603.67,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:silu_pwl:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:silu_pwl:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:silu_pwl:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:silu_pwl:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:silu_pwl:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:silu_pwl:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:silu_pwl:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:silu_pwl:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "silu_pwl",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "434074c39a58476ec16f4c8b65b056ae7519554f6c9d0b6cbf720bae97928042",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/silu_pwl.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "softmax_vector_pwl": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "softmax_vector_pwl",
+      "observed": {
+        "body_present": false,
+        "in_filelist": false,
+        "module_fingerprint": null,
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": null,
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "swiglu_expert": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [
+          "cp_fsm",
+          "top_level_sta"
+        ],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {
+        "count": 7,
+        "latest": {
+          "area_um2": 216625.34,
+          "artifact": "runs/02_yosys_ppa--20260904-032307--33202/feedback.txt",
+          "artifact_sha256": "eebd64eb1e2201bbbf254ac17e06f19ea4d36b3b94fe7e5aceef84b510932371",
+          "attribution_quality": "direct_partition",
+          "comparability_key": "yosys_abc:Nangate45:typical:swiglu_expert:partition_proxy",
+          "corner": "typical",
+          "current_design_match": "unknown",
+          "delay_ps": 1479.42,
+          "design_fingerprint": "unknown",
+          "fmax_valid": false,
+          "library": "Nangate45",
+          "measurement_id": "ppa:02_yosys_ppa--20260904-032307--33202:swiglu_expert:eebd64eb1e2201bb",
+          "method": "yosys_abc",
+          "observed_at": "2026-09-03T20:07:42.690061+00:00",
+          "path_class": "combinational_block",
+          "scope": "partition_proxy",
+          "source_run": "02_yosys_ppa--20260904-032307--33202",
+          "tool": "Yosys/ABC"
+        },
+        "measurement_ids": [
+          "ppa:02_yosys_ppa--20260903-142236--76041:swiglu_expert:0a64561388713030",
+          "ppa:02_yosys_ppa--20260903-164605--86249:swiglu_expert:5f717cc493708f26",
+          "ppa:02_yosys_ppa--20260903-180412--92869:swiglu_expert:35481502938081b8",
+          "ppa:02_yosys_ppa--20260903-204213--3769:swiglu_expert:965ac763fec85d4a",
+          "ppa:02_yosys_ppa--20260903-230833--13901:swiglu_expert:36ba84fa6b04d548",
+          "ppa:02_yosys_ppa--20260904-012009--23795:swiglu_expert:477e811a70bb512a",
+          "ppa:02_yosys_ppa--20260904-032307--33202:swiglu_expert:eebd64eb1e2201bb"
+        ]
+      },
+      "module_id": "swiglu_expert",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "5f31097541c8c1cba92edecfc4e9dd0bff237af67a64965684f19aa616fbe86f",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "blackbox",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/swiglu_expert.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    },
+    "weight_stream_frontend": {
+      "derived": {
+        "can_expand_partitions": [],
+        "currently_blackboxed_partitions": [],
+        "integration_state": "never_verified",
+        "top_level_acceptance_pending": true
+      },
+      "measurements": {},
+      "module_id": "weight_stream_frontend",
+      "observed": {
+        "body_present": true,
+        "in_filelist": true,
+        "module_fingerprint": "0587ac2b06a5a57e4e59adf2cf2dec19f060ab4a205cec9ebaab0d0c979463e2",
+        "partitions": {
+          "cp_arbiter": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_fsm": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_header": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_microop": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "cp_writer": {
+            "representation": "not_in_scope",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          },
+          "top_level_sta": {
+            "representation": "rtl_body",
+            "source": "harness/ppa.toml+rtl/filelist.f"
+          }
+        },
+        "rtl_path": "rtl/weight_stream_frontend.sv",
+        "variant_key": "default"
+      },
+      "verification": {}
+    }
+  },
+  "optimization_state": {
+    "acceptance_debt": [],
+    "accepted": [],
+    "current_candidate": null,
+    "deferred": [
+      {
+        "checkpoint_id": "20260918-094319-64594-cycle1-q4_dequant_matvec_ch",
+        "functional_evidence": null,
+        "hypothesis": "closure_resource_blocked：top_level_sta 闭包测量 exit 137（OOM/截断），非导出缺陷；strategy_change_required=true。retry/increase_budget/continue 重复闭包测量被禁；closure_repair_required=false 使 repair_harness/revise_task_card 未授权；sta_link_result=未测得、sta_timing_measured=false 使 expand_blackbox 前提不成立。optimization_gate.insertion.allowed=true，allowed_modules 含 q4_dequant_matvec_ch（待展开黑盒=recommended_candidate），next_action=optimize_rtl。无量化时序瓶颈（STA 未测得），此为针对 OOM 资源瓶颈的源码价值判断，不把测量不完整写成 RTL 失败。",
+        "insertion_mode": "fused_same_unit",
+        "integration_target": "q4_dequant_matvec_ch",
+        "measurement_partitions": [],
+        "measurement_retries": 0,
+        "measurement_timeout_seconds": null,
+        "module": "q4_dequant_matvec_ch",
+        "reason": "pro_selected_measurement_defer",
+        "repair_attempts": 0,
+        "resume_token": {
+          "pending_blackbox_expansion": {
+            "config_path": "harness/ppa.toml",
+            "module": "q4_dequant_matvec_ch",
+            "partition": "top_level_sta",
+            "summary": "模块登记簿恢复了未完成的黑盒展开验证；必须先完成或确认基础设施不确定。"
+          },
+          "registry_generation": 23
+        },
+        "rtl_fingerprint": null,
+        "sta_scope_gate": null,
+        "top_level_acceptance_required": true
+      }
+    ],
+    "execution_contract": {
+      "action_parameters": {},
+      "allowed_actions": [],
+      "applies_to_actions": [],
+      "contract_kind": "optimization_state",
+      "current_phase": "idle",
+      "enforcement": "advisory",
+      "execution_profiles": {},
+      "forbidden_actions": [],
+      "hard_constraints": {
+        "candidate_id": null,
+        "candidate_module": null,
+        "no_edit_during_measurement": false,
+        "same_candidate_only": false
+      },
+      "recommended_actions": [],
+      "resume_context": {
+        "kind": "blackbox_expansion",
+        "status": "verification_pending",
+        "target": "q4_dequant_matvec_ch"
+      },
+      "retry_budget": {
+        "infrastructure_failures_consume_measurement_retry": false,
+        "measurement_retries_max": 2,
+        "measurement_retries_remaining": 2,
+        "measurement_retries_used": 0
+      },
+      "schema_version": 1,
+      "strategic_questions": []
+    },
+    "gate_api_version": 4,
+    "mainline": {
+      "kind": "blackbox_expansion",
+      "status": "verification_pending",
+      "target": "q4_dequant_matvec_ch"
+    },
+    "max_measurement_retries": 2,
+    "max_repair_attempts": 2,
+    "next_action": "resume_mainline",
+    "phase": "idle",
+    "rejected": [],
+    "schema_version": 4,
+    "skill": "rtl-optimization-triage"
+  },
+  "pending_transaction": {
+    "kind": "blackbox_expansion",
+    "module_id": "q4_dequant_matvec_ch",
+    "owner": "controller",
+    "partition": "top_level_sta",
+    "phase": "verification_pending"
+  },
+  "primary_partition": "top_level_sta",
+  "project_id": "doule_RTLharness",
+  "registry_status": "current",
+  "schema_version": 1
+}

@@ -18,8 +18,6 @@ module nano_golden_datapath_fsm #(
   output logic [35:0] dma_mem_req_addr, input logic dma_mem_rsp_valid,
   output logic dma_mem_rsp_ready, input logic [127:0] dma_mem_rsp_rdata
 );
-  import golden_name_hash_pkg::*;
-  import golden_tensor_meta_pkg::*;
   typedef enum logic [7:0] {IDLE, EMB_REQ, EMB_WAIT, EMB_CAPTURE,
     L0_NORM1_REQ, L0_NORM1_WAIT, L0_NORM1_CAPTURE, KDA_BEGIN, MLA_BEGIN,
     KQ_REQ, KQ_WAIT, KQ_CAPTURE, KK_REQ, KK_WAIT, KK_CAPTURE, KV_REQ, KV_WAIT,
@@ -131,7 +129,7 @@ module nano_golden_datapath_fsm #(
   logic signed [64*16-1:0] sds, e0ds, e1ds;
   logic [64*8-1:0] sdz, e0dz, e1dz;
   logic signed [64*DATA_W-1:0] shared_expert, selected_expert0, selected_expert1, l0_moe_out;
-  qsz_meta_t dynamic_meta;
+  golden_tensor_meta_pkg::qsz_meta_t dynamic_meta;
   logic [7:0] dynamic_matrix_id;
   logic dynamic_qsz_load;
   logic signed [512*DATA_W-1:0] matvec_y;
@@ -269,6 +267,7 @@ module nano_golden_datapath_fsm #(
     .expert1_bus(selected_expert1), .expert0(l0_route0), .expert1(l0_route1), .weight0(l0_route_w0), .weight1(l0_route_w1), .out_bus(l0_moe_out));
 
   always_comb begin
+    logic signed [DATA_W-1:0] head_argmax_val;
     load_valid = (state == EMB_REQ) || (state == L0_NORM1_REQ) || (state == KQ_REQ) || (state == KK_REQ) || (state == KV_REQ) || (state == KB_REQ) ||
                  (state == F1_REQ) || (state == F2_REQ) || (state == G1_REQ) || (state == G2_REQ) ||
                  (state == QCONV_REQ) || (state == KCONV_REQ) || (state == VCONV_REQ) || (state == KA_REQ) ||
@@ -290,42 +289,42 @@ module nano_golden_datapath_fsm #(
                   (state == L1_RA_NORM_REQ) || (state == L1_RA_PROJ_REQ) || (state == L1_NORM1_REQ) || (state == L1_KNORM_REQ) ||
                   (state == L1_RM_NORM_REQ) || (state == L1_RM_PROJ_REQ) || (state == L1_NORM2_REQ) || (state == L1_BIAS_REQ) ||
                   (state == OUT_RM_NORM_REQ) || (state == OUT_RM_PROJ_REQ) || (state == FINAL_NORM_REQ);
-    qh=H_EMB_Q; qb=32'd16384; sh=H_EMB_S; sb=32'd1024; zh=H_EMB_Z; zb=32'd512;
-    ph=H_L0_NORM1_W; pb=32'd128;
-    if (state == KQ_REQ) begin qh=H_L0_KDA_Q_Q; qb=32'd2048; sh=H_L0_KDA_Q_S; sb=32'd128; zh=H_L0_KDA_Q_Z; zb=32'd64; end
-    if (state == KK_REQ) begin qh=H_L0_KDA_K_Q; qb=32'd2048; sh=H_L0_KDA_K_S; sb=32'd128; zh=H_L0_KDA_K_Z; zb=32'd64; end
-    if (state == KV_REQ) begin qh=H_L0_KDA_V_Q; qb=32'd2048; sh=H_L0_KDA_V_S; sb=32'd128; zh=H_L0_KDA_V_Z; zb=32'd64; end
-    if (state == KB_REQ) begin qh=H_L0_KDA_B_Q; qb=32'd64; sh=H_L0_KDA_B_S; sb=32'd4; zh=H_L0_KDA_B_Z; zb=32'd2; end
-    if (state == F1_REQ) begin qh=H_L0_KDA_F1_Q; qb=32'd1024; sh=H_L0_KDA_F1_S; sb=32'd64; zh=H_L0_KDA_F1_Z; zb=32'd32; end
-    if (state == F2_REQ) begin qh=H_L0_KDA_F2_Q; qb=32'd1024; sh=H_L0_KDA_F2_S; sb=32'd128; zh=H_L0_KDA_F2_Z; zb=32'd64; end
-    if (state == G1_REQ) begin qh=H_L0_KDA_G1_Q; qb=32'd1024; sh=H_L0_KDA_G1_S; sb=32'd64; zh=H_L0_KDA_G1_Z; zb=32'd32; end
-    if (state == G2_REQ) begin qh=H_L0_KDA_G2_Q; qb=32'd1024; sh=H_L0_KDA_G2_S; sb=32'd128; zh=H_L0_KDA_G2_Z; zb=32'd64; end
+    qh=golden_name_hash_pkg::H_EMB_Q; qb=32'd16384; sh=golden_name_hash_pkg::H_EMB_S; sb=32'd1024; zh=golden_name_hash_pkg::H_EMB_Z; zb=32'd512;
+    ph=golden_name_hash_pkg::H_L0_NORM1_W; pb=32'd128;
+    if (state == KQ_REQ) begin qh=golden_name_hash_pkg::H_L0_KDA_Q_Q; qb=32'd2048; sh=golden_name_hash_pkg::H_L0_KDA_Q_S; sb=32'd128; zh=golden_name_hash_pkg::H_L0_KDA_Q_Z; zb=32'd64; end
+    if (state == KK_REQ) begin qh=golden_name_hash_pkg::H_L0_KDA_K_Q; qb=32'd2048; sh=golden_name_hash_pkg::H_L0_KDA_K_S; sb=32'd128; zh=golden_name_hash_pkg::H_L0_KDA_K_Z; zb=32'd64; end
+    if (state == KV_REQ) begin qh=golden_name_hash_pkg::H_L0_KDA_V_Q; qb=32'd2048; sh=golden_name_hash_pkg::H_L0_KDA_V_S; sb=32'd128; zh=golden_name_hash_pkg::H_L0_KDA_V_Z; zb=32'd64; end
+    if (state == KB_REQ) begin qh=golden_name_hash_pkg::H_L0_KDA_B_Q; qb=32'd64; sh=golden_name_hash_pkg::H_L0_KDA_B_S; sb=32'd4; zh=golden_name_hash_pkg::H_L0_KDA_B_Z; zb=32'd2; end
+    if (state == F1_REQ) begin qh=golden_name_hash_pkg::H_L0_KDA_F1_Q; qb=32'd1024; sh=golden_name_hash_pkg::H_L0_KDA_F1_S; sb=32'd64; zh=golden_name_hash_pkg::H_L0_KDA_F1_Z; zb=32'd32; end
+    if (state == F2_REQ) begin qh=golden_name_hash_pkg::H_L0_KDA_F2_Q; qb=32'd1024; sh=golden_name_hash_pkg::H_L0_KDA_F2_S; sb=32'd128; zh=golden_name_hash_pkg::H_L0_KDA_F2_Z; zb=32'd64; end
+    if (state == G1_REQ) begin qh=golden_name_hash_pkg::H_L0_KDA_G1_Q; qb=32'd1024; sh=golden_name_hash_pkg::H_L0_KDA_G1_S; sb=32'd64; zh=golden_name_hash_pkg::H_L0_KDA_G1_Z; zb=32'd32; end
+    if (state == G2_REQ) begin qh=golden_name_hash_pkg::H_L0_KDA_G2_Q; qb=32'd1024; sh=golden_name_hash_pkg::H_L0_KDA_G2_S; sb=32'd128; zh=golden_name_hash_pkg::H_L0_KDA_G2_Z; zb=32'd64; end
     // p_bus is in native descriptor byte order: int16 element i occupies
     // p_bus[i*16 +: 16], matching the contract modules' packed inputs.
-    if (state == QCONV_REQ) begin ph=H_L0_KDA_QCONV; pb=32'd512; end
-    if (state == KCONV_REQ) begin ph=H_L0_KDA_KCONV; pb=32'd512; end
-    if (state == VCONV_REQ) begin ph=H_L0_KDA_VCONV; pb=32'd512; end
-    if (state == KA_REQ) begin ph=H_L0_KDA_A; pb=32'd4; end
-    if (state == KDTB_REQ) begin ph=H_L0_KDA_DTB; pb=32'd128; end
-    if (state == KONORM_REQ) begin ph=H_L0_KDA_ONORM_W; pb=32'd64; end
-    if (state == KO_REQ) begin qh=H_L0_KDA_O_Q; qb=32'd2048; sh=H_L0_KDA_O_S; sb=32'd128; zh=H_L0_KDA_O_Z; zb=32'd64; end
-    if (state == RA_NORM_REQ) begin ph=H_L0_RES_ATTN_NORM_W; pb=32'd128; end
-    if (state == RA_PROJ_REQ) begin ph=H_L0_RES_ATTN_PROJ; pb=32'd128; end
-    if (state == L0_NORM2_REQ) begin ph=H_L0_NORM2_W; pb=32'd128; end
-    if (state == L0_BIAS_REQ) begin ph=H_L0_MOE_BIAS; pb=32'd16; end
-    if (state == RM_NORM_REQ) begin ph=H_L0_RES_MLP_NORM_W; pb=32'd128; end
-    if (state == RM_PROJ_REQ) begin ph=H_L0_RES_MLP_PROJ; pb=32'd128; end
-    if (state == L1_RA_NORM_REQ) begin ph=H_L1_RES_ATTN_NORM_W; pb=32'd128; end
-    if (state == L1_RA_PROJ_REQ) begin ph=H_L1_RES_ATTN_PROJ; pb=32'd128; end
-    if (state == L1_NORM1_REQ) begin ph=H_L1_NORM1_W; pb=32'd128; end
-    if (state == L1_KNORM_REQ) begin ph=H_L1_MLA_KNORM_W; pb=32'd256; end
-    if (state == L1_RM_NORM_REQ) begin ph=H_L1_RES_MLP_NORM_W; pb=32'd128; end
-    if (state == L1_RM_PROJ_REQ) begin ph=H_L1_RES_MLP_PROJ; pb=32'd128; end
-    if (state == L1_NORM2_REQ) begin ph=H_L1_NORM2_W; pb=32'd128; end
-    if (state == L1_BIAS_REQ) begin ph=H_L1_MOE_BIAS; pb=32'd16; end
-    if (state == OUT_RM_NORM_REQ) begin ph=H_RES_OUT_NORM_W; pb=32'd128; end
-    if (state == OUT_RM_PROJ_REQ) begin ph=H_RES_OUT_PROJ; pb=32'd128; end
-    if (state == FINAL_NORM_REQ) begin ph=H_FINAL_NORM_W; pb=32'd128; end
+    if (state == QCONV_REQ) begin ph=golden_name_hash_pkg::H_L0_KDA_QCONV; pb=32'd512; end
+    if (state == KCONV_REQ) begin ph=golden_name_hash_pkg::H_L0_KDA_KCONV; pb=32'd512; end
+    if (state == VCONV_REQ) begin ph=golden_name_hash_pkg::H_L0_KDA_VCONV; pb=32'd512; end
+    if (state == KA_REQ) begin ph=golden_name_hash_pkg::H_L0_KDA_A; pb=32'd4; end
+    if (state == KDTB_REQ) begin ph=golden_name_hash_pkg::H_L0_KDA_DTB; pb=32'd128; end
+    if (state == KONORM_REQ) begin ph=golden_name_hash_pkg::H_L0_KDA_ONORM_W; pb=32'd64; end
+    if (state == KO_REQ) begin qh=golden_name_hash_pkg::H_L0_KDA_O_Q; qb=32'd2048; sh=golden_name_hash_pkg::H_L0_KDA_O_S; sb=32'd128; zh=golden_name_hash_pkg::H_L0_KDA_O_Z; zb=32'd64; end
+    if (state == RA_NORM_REQ) begin ph=golden_name_hash_pkg::H_L0_RES_ATTN_NORM_W; pb=32'd128; end
+    if (state == RA_PROJ_REQ) begin ph=golden_name_hash_pkg::H_L0_RES_ATTN_PROJ; pb=32'd128; end
+    if (state == L0_NORM2_REQ) begin ph=golden_name_hash_pkg::H_L0_NORM2_W; pb=32'd128; end
+    if (state == L0_BIAS_REQ) begin ph=golden_name_hash_pkg::H_L0_MOE_BIAS; pb=32'd16; end
+    if (state == RM_NORM_REQ) begin ph=golden_name_hash_pkg::H_L0_RES_MLP_NORM_W; pb=32'd128; end
+    if (state == RM_PROJ_REQ) begin ph=golden_name_hash_pkg::H_L0_RES_MLP_PROJ; pb=32'd128; end
+    if (state == L1_RA_NORM_REQ) begin ph=golden_name_hash_pkg::H_L1_RES_ATTN_NORM_W; pb=32'd128; end
+    if (state == L1_RA_PROJ_REQ) begin ph=golden_name_hash_pkg::H_L1_RES_ATTN_PROJ; pb=32'd128; end
+    if (state == L1_NORM1_REQ) begin ph=golden_name_hash_pkg::H_L1_NORM1_W; pb=32'd128; end
+    if (state == L1_KNORM_REQ) begin ph=golden_name_hash_pkg::H_L1_MLA_KNORM_W; pb=32'd256; end
+    if (state == L1_RM_NORM_REQ) begin ph=golden_name_hash_pkg::H_L1_RES_MLP_NORM_W; pb=32'd128; end
+    if (state == L1_RM_PROJ_REQ) begin ph=golden_name_hash_pkg::H_L1_RES_MLP_PROJ; pb=32'd128; end
+    if (state == L1_NORM2_REQ) begin ph=golden_name_hash_pkg::H_L1_NORM2_W; pb=32'd128; end
+    if (state == L1_BIAS_REQ) begin ph=golden_name_hash_pkg::H_L1_MOE_BIAS; pb=32'd16; end
+    if (state == OUT_RM_NORM_REQ) begin ph=golden_name_hash_pkg::H_RES_OUT_NORM_W; pb=32'd128; end
+    if (state == OUT_RM_PROJ_REQ) begin ph=golden_name_hash_pkg::H_RES_OUT_PROJ; pb=32'd128; end
+    if (state == FINAL_NORM_REQ) begin ph=golden_name_hash_pkg::H_FINAL_NORM_W; pb=32'd128; end
     dynamic_qsz_load = 1'b0; dynamic_matrix_id = '0;
     if (state == L0_ROUTER_REQ) begin dynamic_qsz_load=1'b1; dynamic_matrix_id=8'd9; end
     if (state == SG_REQ) begin dynamic_qsz_load=1'b1; dynamic_matrix_id=8'd10; end
@@ -355,7 +354,7 @@ module nano_golden_datapath_fsm #(
     if (state == L1_E1U_REQ) begin dynamic_qsz_load=1'b1; dynamic_matrix_id=8'd49 + l1_selected1*3; end
     if (state == L1_E1D_REQ) begin dynamic_qsz_load=1'b1; dynamic_matrix_id=8'd50 + l1_selected1*3; end
     if (state == HEAD_REQ) begin dynamic_qsz_load=1'b1; dynamic_matrix_id=8'd72; end
-    dynamic_meta = matrix_meta(dynamic_matrix_id, group_is_128);
+    dynamic_meta = golden_tensor_meta_pkg::matrix_meta(dynamic_matrix_id, group_is_128);
     if (dynamic_qsz_load) begin
       qh=dynamic_meta.q_hash; qb=dynamic_meta.q_bytes; sh=dynamic_meta.s_hash; sb=dynamic_meta.s_bytes;
       zh=dynamic_meta.z_hash; zb=dynamic_meta.z_bytes;
@@ -371,10 +370,18 @@ module nano_golden_datapath_fsm #(
     l1_attn_start = (state == L1_ATTN_START);
     head_calc = head_g128;
     head_active = (state == HEAD_REQ) || (state == HEAD_WAIT) || (state == HEAD_CAPTURE);
+    // Static-index argmax cascade.  The running best value is kept in
+    // head_argmax_val so every comparison reads a constant slice of
+    // head_calc.  The previous form re-read head_calc at the *variable*
+    // index head_argmax_calc, which Yosys proc/techmap unrolled into 511
+    // data-dependent 512-way muxes and OOM'd stage-1 synthesis.
     head_argmax_calc = '0;
+    head_argmax_val = $signed(head_calc[0 +: DATA_W]);
     for (integer head_lane = 1; head_lane < 512; head_lane = head_lane + 1)
-      if ($signed(head_calc[head_lane*DATA_W +: DATA_W]) > $signed(head_calc[head_argmax_calc*DATA_W +: DATA_W]))
+      if ($signed(head_calc[head_lane*DATA_W +: DATA_W]) > head_argmax_val) begin
+        head_argmax_val = $signed(head_calc[head_lane*DATA_W +: DATA_W]);
         head_argmax_calc = head_lane[8:0];
+      end
     busy = !(state == IDLE || state == COMPLETE || state == FAILED);
     token_done = (state == COMPLETE); error = (state == FAILED);
     logits_bus = logits_reg; argmax_index = argmax_reg;

@@ -3,9 +3,12 @@
 # the k3demo-eda container or any unrelated server project.
 set -euo pipefail
 
-REMOTE_HOST="txjg7-2@192.168.0.13"
-REMOTE_PROJECT="/home/txjg7-2/ic-project/k3harness"
-CONTAINER="k3demo-eda"
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+eval "$(python3 "$ROOT/harness/environment.py" --shell)"
+REMOTE_HOST=$HARNESS_REMOTE_HOST
+REMOTE_PROJECT=$HARNESS_REMOTE_PROJECT
+CONTAINER=$HARNESS_CONTAINER
+CONTAINER_WORKDIR=$HARNESS_CONTAINER_WORKDIR
 DRY_RUN=0
 EXPECTED_TASK=""
 
@@ -34,7 +37,7 @@ done
 }
 
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE_HOST" \
-  "REMOTE_PROJECT='$REMOTE_PROJECT' CONTAINER='$CONTAINER' EXPECTED_TASK='$EXPECTED_TASK' DRY_RUN='$DRY_RUN' sh -s" <<'REMOTE_SCRIPT'
+  "REMOTE_PROJECT='$REMOTE_PROJECT' CONTAINER='$CONTAINER' CONTAINER_WORKDIR='$CONTAINER_WORKDIR' EXPECTED_TASK='$EXPECTED_TASK' DRY_RUN='$DRY_RUN' sh -s" <<'REMOTE_SCRIPT'
 set -eu
 
 status="$REMOTE_PROJECT/status/current.status"
@@ -56,9 +59,9 @@ esac
 
 echo "target task=$task run_id=$run_id previous_state=$state"
 if [ "$DRY_RUN" = 1 ]; then
-  docker exec -e HARNESS_RUN_ID="$run_id" "$CONTAINER" sh -lc '
+  docker exec -e HARNESS_RUN_ID="$run_id" -e HARNESS_CONTAINER_WORKDIR="$CONTAINER_WORKDIR" "$CONTAINER" sh -lc '
     ps -eo pid=,etime=,args= | awk -v run="$HARNESS_RUN_ID" \
-      "index(\$0, \"/runs/\" run \"/\") || (index(\$0, \"harness/run.py\") && index(\$0, \"--run-id \" run))"
+      "index(\$0, \"/runs/\" run \"/\") || index(\$0, \"runs/\" run) || (index(\$0, \"harness/run.py\") && index(\$0, \"--run-id \" run))"
   ' || true
   exit 0
 fi
@@ -73,13 +76,20 @@ esac
 # The script text contains no expanded run-id, so the inspection shell cannot
 # accidentally match and kill itself.  Only the target process receives it via
 # HARNESS_RUN_ID.
-docker exec -e HARNESS_RUN_ID="$run_id" "$CONTAINER" sh -lc '
+docker exec -e HARNESS_RUN_ID="$run_id" -e HARNESS_CONTAINER_WORKDIR="$CONTAINER_WORKDIR" "$CONTAINER" sh -lc '
   find_pids() {
-    ps -eo pid=,args= | awk -v run="$HARNESS_RUN_ID" \
-      "index(\$0, \"/runs/\" run \"/\") || (index(\$0, \"harness/run.py\") && index(\$0, \"--run-id \" run))" \
-      | awk "{print \$1}"
+    pid_file="$HARNESS_CONTAINER_WORKDIR/runs/$HARNESS_RUN_ID/container.pid"
+    if [ -f "$pid_file" ]; then
+      pid=$(sed -n "1p" "$pid_file")
+      case "$pid" in
+        ""|*[!0-9]*) ;;
+        *) kill -0 "$pid" 2>/dev/null && echo "$pid" ;;
+      esac
+    fi
+    ps -eo pid=,stat=,args= | awk -v run="$HARNESS_RUN_ID" \
+      "\$2 !~ /^Z/ && (index(\$0, \"/runs/\" run \"/\") || index(\$0, \"runs/\" run) || (index(\$0, \"harness/run.py\") && index(\$0, \"--run-id \" run))) {print \$1}"
   }
-  pids=$(find_pids || true)
+  pids=$(find_pids | sort -u || true)
   if [ -z "$pids" ]; then
     echo "no active container process belongs to run $HARNESS_RUN_ID"
     exit 0
@@ -87,7 +97,7 @@ docker exec -e HARNESS_RUN_ID="$run_id" "$CONTAINER" sh -lc '
   echo "sending TERM to: $pids"
   kill -TERM $pids 2>/dev/null || true
   sleep 3
-  pids=$(find_pids || true)
+  pids=$(find_pids | sort -u || true)
   if [ -n "$pids" ]; then
     echo "sending KILL to remaining: $pids"
     kill -KILL $pids 2>/dev/null || true

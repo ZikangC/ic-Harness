@@ -17,13 +17,13 @@ rtl/rmsnorm_q.sv
 rtl/l2norm_q.sv
 rtl/sigmoid_pwl.sv
 rtl/silu_pwl.sv
-rtl/softmax_vector_pwl.sv
 rtl/residual_mix2_scores.sv
 rtl/residual_mix2_contract.sv
 rtl/q4_dequant_matvec.sv
 rtl/q4_matvec_dispatch.sv
 rtl/q4_matvec_128x64.sv
 rtl/causal_conv4.sv
+rtl/kda_delta_col.sv
 rtl/kda_delta_head.sv
 rtl/kda_recurrence_contract.sv
 rtl/mla_kv_cache.sv

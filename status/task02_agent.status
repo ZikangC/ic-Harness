@@ -1,0 +1,5 @@
+task=02_yosys_ppa
+stage=measurement_incomplete
+attempt=expansion
+updated_at=2026-09-18T21:27:29+08:00
+detail=module=q4_dequant_matvec_ch; PPA budget exhausted with partial evidence; next guidance cycle may reassess

@@ -9,18 +9,40 @@ module l2norm_q #(
   input  logic signed [DIM*DATA_W-1:0] x_bus,
   output logic signed [DIM*DATA_W-1:0] y_bus
 );
-  import nano_arch_pkg::*;
+  function automatic logic signed [DATA_W-1:0] sat_data(
+      input logic signed [63:0] value
+  );
+    logic signed [63:0] max_value;
+    logic signed [63:0] min_value;
+    begin
+      max_value = (64'sd1 <<< (DATA_W - 1)) - 1;
+      min_value = -(64'sd1 <<< (DATA_W - 1));
+      if (value > max_value)
+        sat_data = max_value[DATA_W-1:0];
+      else if (value < min_value)
+        sat_data = min_value[DATA_W-1:0];
+      else
+        sat_data = value[DATA_W-1:0];
+    end
+  endfunction
 
   function automatic logic [31:0] isqrt64(input logic [63:0] value);
     logic [63:0] root;
-    logic [63:0] trial;
+    logic [63:0] sq;  // invariant: sq == root * root
     integer bit_index;
     begin
       root = '0;
+      sq = '0;
+      // Incremental binary square root, bit-exact with the restoring form
+      // (trial = root | (1<<k); keep iff trial*trial <= value).  For the old
+      // root, trial*trial = sq + (root << (k+1)) + (1 << 2k), so after loop
+      // unrolling each of the 32 stages is a 64-bit add + compare instead of
+      // a 64x64 multiply; all quantities stay below 2^64 (no overflow).
       for (bit_index = 31; bit_index >= 0; bit_index = bit_index - 1) begin
-        trial = root | (64'd1 << bit_index);
-        if (trial * trial <= value)
-          root = trial;
+        if ((sq + (root << (bit_index + 1)) + (64'd1 << (2 * bit_index))) <= value) begin
+          sq = sq + (root << (bit_index + 1)) + (64'd1 << (2 * bit_index));
+          root = root | (64'd1 << bit_index);
+        end
       end
       isqrt64 = root[31:0];
     end

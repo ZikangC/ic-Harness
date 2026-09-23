@@ -15,7 +15,10 @@ module causal_conv4 #(
   logic signed [DATA_W-1:0] history [0:2][0:CHANNELS-1];
   integer channel_comb, tap_comb;
   integer channel_seq, tap_seq;
-  logic signed [63:0] sum;
+  // pre_silu_bus = sum >>> 11 reads only sum[DATA_W+10:11]; signed
+  // add/mul is computed mod 2^(DATA_W+11), so the low (DATA_W+11) bits are
+  // bit-exact with a full-width accumulator on all reachable inputs.
+  logic signed [DATA_W + 11 - 1:0] sum;
   logic signed [DATA_W-1:0] sample;
   logic signed [15:0] coefficient;
 

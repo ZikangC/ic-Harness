@@ -1,0 +1,608 @@
+# Task 02: layered Nangate45 measurement, ONE partition per yosys invocation.
+# scripts/remote_yosys_round.sh substitutes @PART_TAG@/@PART_TOP@/@PART_CHPARAM@/
+# @PART_BLACKBOX@/@READFILES@/LIB and runs each partition under its own
+# timeout, so a slow/heavy module cannot discard the per-module area/timing
+# already measured for the others (Round-09's single flattened top-level ABC
+# stalled at post-flatten OPT_MERGE on 722,367 cells and never reached ABC).
+#
+# Round-18 (synthesis-usability repair): the previous single `abc` call mapped
+# every module of the partition in one pass, starting with the partition top.
+# When the top is a giant leaf (Round-04 evidence: sigmoid_from_q14_mod grew to
+# 419,612 gate cells after techmap, sigmoid_pwl >300 s in ABC), that one ABC
+# run stalled inside "57.2 Extracting gate netlist of module ..." and the
+# partition timed out BEFORE any "Chip area for module" line was emitted, so
+# every partition containing the giant -- and every partition queued behind it
+# -- reported no area/timing at all.  The flow below therefore keeps hierarchy
+# and maps per-leaf-module with a bounded window each:
+#
+#   pass 1 (leaves first): `select @PART_TOP@ %n` selects everything EXCEPT the
+#     partition top (a bare module pattern followed by the %n complement; no
+#     -add/-delete, so it works across Yosys versions).  `abc` maps each leaf
+#     independently and `stat -liberty` emits their area lines immediately, so
+#     a giant top can no longer discard the leaves' results.
+#   pass 2 (top last): `select @PART_TOP@` selects the top alone and maps it in
+#     its own bounded window.  Its submodule instances are already-mapped
+#     blackboxes, so this reports the top's own gates.  Even when this window
+#     times out, the leaves' area/timing and the pre-ABC per-module cell counts
+#     are already on record.
+#
+# Area is emitted exactly once per module: the LEAF_AREA_DONE stat covers the
+# non-top modules and the TOP_AREA_DONE stat covers the top, so summing the
+# "Chip area for module" lines inside a partition's log gives the partition's
+# standard-cell logic area without double-counting a leaf that also appears in
+# the top's subtree.
+#
+# Hierarchy is PRESERVED (no top-level `flatten`).  An early `stat` right
+# after `proc`/`fsm` lowering and BEFORE `memory -nomap` reports the $mem
+# bits as SRAM/ROM capacity; the per-leaf and final `stat -liberty` report
+# mapped logic area only ($mem_v2 bits are not counted by `stat` in Yosys
+# 0.64), so each partition's memory bits are emitted exactly once.
+#
+# Every number below is a pre-layout per-module estimate (partition-level,
+# leaves mapped first then the top; data-plane leaves blackboxed in the
+# control-plane closure) -- NOT a full no-blackbox top-level closure, so
+# measurement_scope stays PARTIAL_HIERARCHICAL.
+#
+# Round-19 (measurement completion): the ABC invocations below switch to the
+# lightweight single-round `-fast` script (previously `-script
+# +strash;map;topo;stime,-c` appended to ABC's multi-pass default).  The
+# Nangate45 liberty, `-D 10000` (10 ns) target and the input/output delay
+# constraint file are UNCHANGED, so every number remains a Nangate45 pre-layout
+# estimate; the lighter script only trades mapping effort for runtime so a
+# partition is likelier to reach `stat -liberty` inside its bounded window.
+# This calibre difference is a script diff (recorded in the report), not a
+# library change.  Each `stat` checkpoint is additionally mirrored with `tee`
+# to build/ppa_measure.<tag>.<stage>.stat so area/timing evidence survives even
+# if the harness's yosys.log tail is truncated on a timeout.
+#
+# Round-24 (measurement completion, scheduler fix): the per-module two-pass
+# flow below is UNCHANGED this round -- it remains the measure contract (leaves
+# mapped first in pass 1, top mapped last in pass 2, hierarchy kept, one
+# partition per yosys invocation, Nangate45 liberty / `-D 10000` (10 ns) target
+# / input-output delay constraint unchanged).  The operative change is the
+# partition schedule in harness/ppa.toml: cheap known-real leaves lead so a
+# short probe lands real area/timing first, the unmeasured q4-matvec leaves
+# follow so the probe's log frontier records which partition is heaviest, and
+# the memory-bearing closures stay reachable when budget allows.  No functional
+# change to the measurement calibre; every number remains a pre-layout
+# per-module estimate with measurement_scope=PARTIAL_HIERARCHICAL.
+#
+# Round-25 (measurement completion, hierarchical split): ppa.toml `blackbox`
+# is now a space-separated MODULE-NAME LIST.  scripts/remote_yosys_round.sh
+# filters harness/ppa_leaves_blackbox.v down to exactly those names into
+# build/ppa_bb_<name>.v and injects `read_verilog -sv -lib build/ppa_bb_<name>.v`
+# via @PART_BLACKBOX@, so a partition's OWN top (never in the list) stays real
+# while its heavy q_bus x x_bus MAC subtree is abstracted.  The enclosing
+# q4-matvec partitions then complete their own glue area instead of timing out
+# in one 37x24 MAC techmap/ABC column; the real MAC area is measured by the
+# standalone q4_dequant_matvec_ch partition.  The PARTITION_BLACKBOX log line
+# below records which modules were abstracted, so a wrapper-only area row is
+# never mistaken for the subtree's full area.
+#
+# Round-31 (measurement completion, end-to-end convergence): l2norm_q is added
+# to the KDA closure's blackbox list (kda_recurrence_contract, alongside
+# kda_delta_col; cp_fsm already blackboxed it).  `select <top> %n` and abc skip
+# blackboxed modules automatically, so the closure maps its wrapper glue inside
+# a bounded window and its $mem accounting reaches MEMORY_STAT_COMPLETE instead
+# of stalling on l2norm_q's ~886k-cell pre-ABC body (isqrt64 32-stage + 64-bit
+# $div + 32 64x24 multiplies).  The standalone `l2norm_q` leaf partition
+# (top=l2norm_q, blackbox="") measures that REAL body and is the leaf-wrapper
+# reference: its stat -liberty area and ABC wire-load delay are the true
+# l2norm_q baseline, and the closure's blackbox-boundary timing (ABC cannot
+# propagate delay through a -lib box) is cross-checked against this leaf result
+# rather than read as a chip critical path.
+#
+# Round-36 (measurement completion, harness fix): the harness no longer writes
+# build/ppa_measure.constr and the abc invocations below no longer pass
+# `-constr`.  This ABC build's read_constr rejected the harness-written
+# set_input_delay/set_output_delay file ("Unrecognized token"), so the 2000 ps
+# boundary margin was silently dead.  Removing it makes the calibre explicit:
+# every delay below is a raw pre-layout combinational path estimate with NO
+# input/output boundary margin and NO STA -- exactly as measured, never
+# confused with a constrained path.
+# Round-31 note (kept verbatim for history) follows.
+# The `-constr
+# build/ppa_measure.constr` I/O delay applies at the partition boundary; this
+# ABC build's read_constr rejects the harness-written set_input_delay/
+# set_output_delay file (non-fatal, logged as "Unrecognized token"), so that
+# 2000 ps margin is currently NOT applied -- every delay below remains a raw
+# pre-layout combinational path estimate, NOT STA.
+#
+# 2026-09-10 (Task-02 measurement completion, end-to-end convergence; upper-Pro
+# batch directive -- the ONLY change of this round): every `abc` invocation
+# below now runs the library-driven fanout-repair pass `buffer` on the MAPPED
+# netlist, between `topo` and `stime`.  The edit is inside the `-script` string
+# only; the `abc` options themselves (`-liberty`, `-D 10000` = 10 ns, `-dff`)
+# and the read order are untouched.
+#
+# Why: the top_level_sta closure STA reported the single arc
+# `writer/_37622_/ZN` (INV_X1) at 1,482,919 ps and left
+# `sta_artifact_fanout_status=unresolved`.  That arc is an out-of-table
+# extrapolation of one net that fans out to roughly eight thousand gate inputs
+# -- a mapping artifact of a flow that never buffers, not logic depth.
+# `abc -liberty` maps without any fanout repair, so nothing bounded that net;
+# `buffer` inserts the library's own buffer cells until every non-primary-input
+# node drives at most `-N` loads (default `nDegree` = ten, and with the default
+# `fAddBufs` it uses real buffers rather than inverter pairs) and re-sizes gates
+# against the same Liberty timing -- exactly the fanout repair a pre-layout flow
+# needs before STA.  It adds real cells from the mapped technology library
+# (buffer cells plus whatever the sizing changes) and changes no module port, no
+# primary input/output and no functional behaviour; the existing instances keep
+# their connectivity except that a high-fanout driver net is re-driven through
+# the inserted buffer cells.
+#
+# Placement is deliberate: after `map` (so the preceding `strash;map` cannot
+# swallow the tree), before `stime` (so the logged `Delay = ... ps` line
+# describes the buffered netlist) and before the `clean`/`stat -liberty`
+# checkpoints (so the added cells are counted in the area rows and show up in
+# the cell histogram).  The ABC log echoes `ABC: + buffer` immediately before
+# `ABC: + stime -c`; that per-partition echo is the attribution that the pass
+# really ran, and a partition without it has no buffering evidence.
+#
+# Calibre is otherwise unchanged: same Nangate45 typical library, same read
+# order, same 25-module blackbox list, same per-module pre-layout measurement
+# scope (PARTIAL_HIERARCHICAL for every partition that keeps a blackbox).  The
+# expected visible effect is that standard-cell logic area grows (buffers and
+# the sizing are real cells) while the reported wire-load delay falls; both are
+# reported exactly as measured, and neither is a full-chip Fmax.
+#
+# 2026-09-10 (Task-02 flop handover; upper-Pro batch directive -- the ONLY
+# change of this round): all four `abc` invocations below now run with the
+# partition's flops STILL IN THEIR INTERNAL FORM (`$_DFF_P_` / `$_DFF_PN0_`
+# from `techmap`), and each `dfflibmap -liberty LIB` line moves from BEFORE its
+# `abc` to immediately AFTER it.
+#
+# Why: the previous round's `buffer` pass removed the combinational high-fanout
+# artifact (`writer/_37622_/ZN` went from 1,482,919 ps to gone), but the
+# remaining worst arc became a TIMING-CELL arc -- `writer/_78655_/Q` (DFFR_X1)
+# at 32,983 ps -- with `sta_artifact_fanout_status=unresolved`.  Root cause:
+# the flow ran `dfflibmap` BEFORE `abc`, so by the time ABC started there were
+# no `$dff`/`$_DFF_*` cells left (the log shows `mapped 68461 $_DFF_PN0_ cells
+# to \DFFR_X1` / `mapped 167424 $_DFF_P_ cells to \DFF_X1` happening first).
+# A flop Q net is then, from ABC's point of view, a net driven by an opaque
+# library box -- indistinguishable from a primary input -- so `buffer` could
+# only repair nets inside the combinational cone and never the Q nets that
+# actually fan out to thousands of gate inputs.  Handing the flops to ABC
+# (`abc ... -dff`) puts those Q drivers inside ABC's network, where the same
+# `buffer` pass can build the library buffer tree on them; the following
+# `dfflibmap` then maps the returned `$_DFF_*` cells through the same
+# Nangate45 typical Liberty.
+#
+# Scope of the edit: the `dfflibmap -liberty LIB` line is MOVED, not changed --
+# the same Liberty, the same `abc -liberty LIB -D 10000 ... -dff` options, the
+# same read order, the same blackbox list, the same `clean` / `stat -liberty` /
+# MEMORY_STAT_COMPLETE checkpoints.  A side benefit is that each pass's
+# pre-ABC `stat` now lands AFTER techmap and BEFORE abc, so it prints the
+# unmapped `$_DFF_PN0_`/`$_DFF_P_` counts -- the attribution that the flops
+# really were handed to ABC (`DFFR_X1`/`DFF_X1` must reappear in the
+# post-`dfflibmap` `stat -liberty` rows).  No module port, no primary
+# input/output and no functional behaviour changes; the only netlist delta is
+# added BUF/INV cells and their area.  Calibre is otherwise unchanged, and
+# every number stays a pre-layout per-module estimate (PARTIAL_HIERARCHICAL).
+#
+# 2026-09-10 (Task-02 fanout-split completeness; upper-Pro batch directive --
+# the ONLY change of this round): the four `abc` invocations below now pass
+# `-constr build/ppa_measure.constr` (the file is written once per partition by
+# the `tee -o ... log "set_driving_cell INV_X1"` line further down, immediately
+# before the closure block), and their `buffer` step now carries `-p`.
+# Nothing else in those lines changed: same `-liberty LIB`, same `-D 10000`
+# (10 ns), same `-dff`, same script order (`strash;map;topo;buffer;stime -c`).
+#
+# Why `-constr`: ABC's library-driven `buffer` pass only repairs fanout on nets
+# it is willing to re-drive, and the sizing-based implementation this build runs
+# (`Scl_CommandBuffer` -> `Abc_SclBufferingPerform` -> `Abc_SclBufSize`) admits a
+# CI driver ONLY when a PI driving cell is declared:
+# `(Abc_ObjIsNode(pObj) && Abc_ObjFaninNum(pObj) > 0) || (Abc_ObjIsCi(pObj) &&
+# p->pPiDrive)`.  `Abc_ObjIsCi` is `ABC_OBJ_PI || ABC_OBJ_BO`, and a flop Q net
+# is a BO (Yosys hands the partition's `$_DFF_P_`/`$_DFF_PN0_` cells to ABC as
+# latches with box terminals, which is the `-dff` form ABC sees after the
+# `dfflibmap` move).  `pPiDrive` is set from `Abc_FrameReadDrivingCell()`, which
+# only the constr line `set_driving_cell <cell>` populates (read back by
+# `Scl_CommandReadConstr` -> `Abc_SclReadTimingConstr`).  Without a constr the
+# pass repaired internal nodes -- `logit_writer` already carries BUF_X4/X8/X16 --
+# yet never a flop Q net, which is the measured defect: OpenSTA extrapolated the
+# CK->Q table of `writer/_46333_/Q` to 33,985 ps and left
+# `sta_artifact_fanout_status=unresolved`, and the earlier `buffer` round only
+# moved the worst arc from a combinational pin onto that flop pin.  `buffer -p`
+# is passed as well because it is the documented "buffering primary inputs"
+# toggle of the same command: the CI gate that matters here is `pPiDrive`, but in
+# an ABC build whose `buffer` routes to the legacy `Abc_SclBufPerform` the same
+# intent is expressed by `fBufPis`, so the flag keeps this round's hypothesis
+# testable on either implementation instead of silently doing nothing.
+design -reset
+@PART_BLACKBOX@
+read_verilog -sv -defer @READFILES@
+hierarchy -check -top @PART_TOP@ @PART_CHPARAM@
+log "=== PARTITION @PART_TAG@: hierarchy done (hierarchy kept, no flatten) ==="
+log "PARTITION_BLACKBOX=@PART_BLACKBOX_LIST@"
+proc; opt -fast; fsm; opt -fast
+# Early stat BEFORE `memory -nomap`: Yosys `stat` reports "Number of memories" /
+# "Number of memory bits" only for $mem cells.  `memory -nomap` still runs
+# memory_collect (it only skips the dff/share/map/memx/bram/libmap/macc stages),
+# folding $mem into $mem_v2, whose bits Yosys 0.64 `stat` no longer counts
+# (round-04 log shows "2 $mem_v2" with a "-" memory-bits row), which is why
+# sram_total_bits was 未测得.  This line emits the $mem bits exactly once per
+# partition; the post-collect `stat -liberty` below still reports mapped area
+# without re-emitting bits, so the controller's cross-partition sum is not
+# doubled.
+stat
+log "MEMORY_STAT_COMPLETE=@PART_TAG@"
+memory -nomap; opt -fast
+log "=== PARTITION @PART_TAG@: proc/fsm/memory lowering done ==="
+# Round-40 (measurement completion, end-to-end convergence): complete the
+# memory collection and run the combinational-loop diagnostics BEFORE any
+# techmap/ABC.  Round-39's log showed the standalone MEMORY_COLLECT only at
+# pass 65 -- after every partition's ABC had already timed the netlist.  This
+# explicit `memory_collect` finalizes the $mem_v2 form up front (the $mem bits
+# were already emitted by the early stat above, MEMORY_STAT_COMPLETE), so
+# every per-module ABC wire-load delay in this partition is measured on a
+# fully-collected netlist.  `check` prints "Found a combinational loop"
+# for every loop in the partition -- a loop, not wire-load, is what makes a
+# delay non-physical -- so the tee'd pre_abc.check log separates "RTL comb
+# loop" from "acyclic deep comb chain (wire-load artifact)" and records the
+# artifact-partition evidence per partition.
+# Round-42 (measurement completion, harness fix): the Round-40 diagnostics
+# were written as TWO lines -- a bare `tee -o <file>` (a no-op with no
+# command, opening the file empty) followed by a plain `check` on the main
+# log -- so the verdict never reached the check file and plain `check` did not
+# force loop detection.
+# Round-43 (measurement completion, harness fix): this container's Yosys build
+# rejects `check -loop` ("Command syntax error: Unknown option or option in
+# arguments", seen on every non-macro partition), so the single-line tee+check
+# uses bare `check`.  The tee'd pre_abc.check file still captures each
+# partition's acyclic / "Found a combinational loop" verdict, and loop
+# classification evidence is read from that file -- a loop, not wire-load, is
+# what makes a delay non-physical.  `-loop`-forced detection is NOT available
+# in this build; verdicts rely on plain `check` output.
+memory_collect
+log "MEMORY_PRE_ABC_COLLECT_DONE=@PART_TAG@"
+tee -o build/ppa_measure.@PART_TAG@.pre_abc.check check
+log "LOOP_CHECK_DONE=@PART_TAG@"
+# Round-40: SRAM/ROM macro blackbox declaration.  mla_kv_cache is the only
+# memory-bearing SUBMODULE in the golden closure (cp_fsm instantiates it; the
+# PWL/LUT memories live in partition tops and stay real).  Removing its body
+# before techmap keeps its memory read-port logic out of ABC's wire-load
+# delays; its 245,760 bits were already counted by the early stat
+# (MEMORY_STAT_COMPLETE) and are accounted by the ~1 Mbit/mm2 macro model.
+# The `m:*` module selection is a no-op in every other partition.
+blackbox m:*mla_kv_cache*
+log "SRAM_MACRO_BLACKBOX_DONE=@PART_TAG@"
+# Round-35 (measurement completion): `@PART_MACRO@` is replaced by
+# scripts/remote_yosys_round.sh with an empty string for normal partitions.
+# Partitions declared `macro_blackbox = true` in harness/ppa.toml (currently
+# kda_recurrence_contract and q4_embedding_lookup) NO LONGER use this template:
+# the harness routes them to the standalone harness/ppa_macro.ys, which reads
+# the real RTL body, emits the early `stat` $mem bits (memory-stat stays
+# counted via MEMORY_STAT_COMPLETE), logs the macro markers, then reaches EOF
+# without any techmap/ABC and without an `exit` command -- Round-34's injected
+# `exit 0` returned rc=1 because this container's Yosys has no `exit` command.
+# Stopping before techmap/ABC keeps the flattened 9.2-Mbit memory from mapping
+# to ~792k gates / 26 us wire-load and destroying the 10 ns comparison.  Their
+# area is accounted by the macro model (~1 Mbit/mm2), not as standard cells.
+@PART_MACRO@
+# 2026-09-10 (Task-02 fanout-split completeness; upper-Pro batch directive --
+# the ONLY source change of this round): declare ABC's PI driving cell so the
+# SCL `buffer` pass actually splits the flop-Q (CI) nets.  Root cause from the
+# ABC source, not from a guess: `Abc_BufManAddNode` refused CI drivers
+# ("allow PIs to have high fanout"), and the sizing-based pass this build uses
+# (`Scl_CommandBuffer` -> `Abc_SclBufferingPerform` -> `Abc_SclBufSize`) filters
+# with `(Abc_ObjIsNode(pObj) && Abc_ObjFaninNum(pObj) > 0) || (Abc_ObjIsCi(pObj)
+# && p->pPiDrive)`.  `Abc_ObjIsCi` is `ABC_OBJ_PI || ABC_OBJ_BO`, i.e. PIs AND
+# latch/box outputs, and every flop Q net is a BO -- but `pPiDrive` stays NULL
+# unless `Abc_FrameReadDrivingCell()` is set, which only `set_driving_cell` in
+# the constr file ABC reads via Yosys's `abc -constr` can do.  With no constr
+# the pass repaired every internal node (hence BUF_X4/X8/X16 already in the
+# netlist) yet never a flop Q net, which is exactly the measured defect:
+# STA extrapolated the CK->Q table of `writer/_46333_/Q` to 33,985 ps.
+# `tee -o` truncates-or-creates `build/ppa_measure.constr` inside each
+# partition run, so this fix needs no second harness file; ABC's read_constr
+# then prints `Setting driving cell to be "INV_X1".` as the per-partition
+# attribution.  The `log` argument is passed WITHOUT quotes: with the quotes the
+# log echo wrote the quote characters into the file (ABC then reported
+# `Unrecognized token ""set_driving_cell".` and never set a driving cell -- see
+# the note right below).
+# INV_X1 is the weakest Nangate45 driver and is present in the typical Liberty
+# the flow already reads; if the name were absent ABC prints
+# `Cannot find the default PI driving cell ...` and this round's hypothesis is
+# falsified instead of silently untested.  No RTL, no Liberty, no `-D 10000`,
+# no `-dff`, no blackbox list, no read order and no checkpoint changed.
+tee -o build/ppa_measure.constr log set_driving_cell INV_X1
+# 2026-09-10 (Task-02 flop-Q PI handover; upper-Pro batch directive -- the ONLY
+# source change of this round, superseding the `-dff` / `dfflibmap`-order notes
+# above): every `abc` invocation in both flow blocks below no longer passes
+# `-dff`, and each `dfflibmap -liberty LIB` moves back from AFTER its `abc` to
+# BEFORE it -- the standard Yosys QoR order (`dfflibmap`, then `abc`).
+#
+# Why: last round's `buffer` pass ran with the flops still in their internal
+# `$_DFF_PN0_`/`$_DFF_P_` form (`abc -dff`), where a flop Q net reaches ABC as a
+# BO (box/latch output); the SCL `buffer` pass this build runs admits a CI
+# driver only through `(Abc_ObjIsNode(pObj) && Abc_ObjFaninNum(pObj) > 0) ||
+# (Abc_ObjIsCi(pObj) && p->pPiDrive)`, and `p->pPiDrive` is populated only by
+# the constr's `set_driving_cell` line.  Last round that line never landed: the
+# quoted `log "..."` argument was echoed into `build/ppa_measure.constr` WITH
+# its quote characters, so ABC logged `Unrecognized token ""set_driving_cell".`
+# and no `Setting driving cell to be "INV_X1".` appears anywhere in that run's
+# log.  Measured defect (runs/02_yosys_ppa--20260910-224144--31805): STA still
+# extrapolated the CK->Q table of `writer/_46333_/Q` to 33,985 ps -- 93% of the
+# 36.532 ns arrival, slack -28.532 ns -- and `sta_artifact_fanout_status` stayed
+# `unresolved`.
+#
+# This round therefore hands ABC a netlist whose flops are already mapped to the
+# same Liberty's `DFF_X1`/`DFFR_X1` cells (Q nets on the CI/PI side) AND writes
+# the constr line without quotes, so `set_driving_cell INV_X1` is actually
+# parsed.  Both halves are one atomic harness change.  Falsifiable criterion, on
+# the closure smoke's `report_checks` worst path: the single 33.985 ns
+# `writer/_46333_/Q` arc is replaced by a multi-level buffer chain (that pin's
+# arc < 1 ns) and the worst slack narrows clearly => the mechanism holds; a
+# remaining single flop-Q arc > 25 ns => falsified (next lever: a second
+# `buffer` after `abc`, or `insbuf` after `dfflibmap`).
+#
+# Scope of the edit: the `dfflibmap -liberty LIB` line is MOVED, the `abc`
+# options are otherwise untouched (`-liberty LIB`, `-D 10000`, the same
+# `-constr build/ppa_measure.constr`, the same
+# `-script +strash;map;topo;buffer,-p;stime,-c`), and the constr keeps the same
+# cell.  No RTL, no Liberty, no blackbox list, no read order, no
+# `clean`/`stat -liberty`/`*.stat` checkpoint, no MEMORY_STAT_COMPLETE and no
+# CLOSURE_*_ABC_DONE marker changed.  Every flop is still mapped through the same
+# Nangate45 typical Liberty, so no module port, no primary input/output and no
+# functional behaviour changes; the netlist delta is the flop-mapping order plus
+# whatever real library buffer cells `buffer` inserts on Q nets (reported as
+# measured, not predicted).  Every number stays a pre-layout estimate and
+# `measurement_scope` stays PARTIAL_HIERARCHICAL -- the closure still blackboxes
+# the compute leaves, so this is never a full-chip Fmax.
+# 2026-09-11 (Task-02 measurement completion; upper-Pro batch directive -- the
+# ONLY change of this round): the four `abc` invocations below drop the `-c`
+# flag from their `-script ...;stime,-c` tail (now plain `stime`).  Nothing else
+# in those lines changed: same `-liberty LIB`, same `-D 10000` (10 ns), same
+# `-constr build/ppa_measure.constr`, same `strash;map;topo;buffer,-p;stime`
+# order.
+#
+# Why `-c` is a measurement artifact, not a critical path: in this ABC build
+# `-c` is NOT "print the critical path" -- `Scl_CommandStime` does
+# `case 'c': fUseWireLoads ^= 1;` ("toggle using wire-loads [default = no]"),
+# and `Abc_SclManStart` attaches the Liberty `default_wire_load` to the
+# wire-load model ONLY when `fUseWireLoads` is set.  The Nangate45 typical
+# Liberty defaults to `5K_hvratio_1_1`, so with `-c` every stime runs under that
+# 5K fanout model, whose per-net capacitance `Abc_SclFindWireCaps` extrapolates
+# on the huge-fanout nets of a ~851k-gate partition.  The reported
+# `nano_golden_datapath_fsm` `WireLoad="5K_hvratio_1_1" Delay=219114.81 ps`
+# (check=acyclic) is therefore that model's extrapolation, not logic depth: the
+# SAME closed netlist's OpenSTA in-table worst path is 2.000 ns, ~110x smaller.
+# `Abc_SclTimeNtkPrint` prints its `WireLoad = "%s" ... Area ... Delay = N ps`
+# line unconditionally, so with no wire-load model selected the log shows
+# `WireLoad = "none"` and the harness's `WireLoad|Delay =` grep, seq_pct
+# classification and delay_artifact_count calibre are all unchanged.
+#
+# Falsifiable criterion (closure smoke's ABC line): the FSM `Delay` collapses
+# to the ~2-10 ns order => artifact confirmed; still > 100 ns => hypothesis
+# falsified and the next lever is `stime -p` per-stage path printing.  Zero RTL
+# change; same Nangate45 library, same 25-module blackbox list, same read order;
+# every number stays a pre-layout per-module estimate and `measurement_scope`
+# stays PARTIAL_HIERARCHICAL (the compute leaves are still blackboxed -- this is
+# never a full-chip Fmax).
+# ===CLOSURE_FLOW_BEGIN===
+# Round-46 (measurement completion, end-to-end convergence): top-level closure
+# STA path.  Runs ONLY for the top_level_sta partition
+# (top=nano_golden_decoder_top); scripts/remote_yosys_round.sh deletes this
+# block for every ordinary partition.
+#
+# Round-60 (harness repair): the closure netlist MUST be self-contained so the
+# single-netlist `top_level_sta` smoke links without the cp_* control-plane
+# partitions.  Pre-Round-60 this flow mapped ONLY the top's own glue and wrote
+# build/ppa_closure_top.v alone; the top's five control-plane submodules
+# (mem_arbiter4, nano_golden_datapath_fsm, image_header_reader, logit_writer,
+# nano_golden_microop_controller) were referenced by the top but their mapped
+# bodies were absent from the assembled STA netlist, so link_design resolved
+# the first of them as a missing LEF macro -> ORD-2013 "instance arb LEF master
+# mem_arbiter4 not found".  The flow below maps the WHOLE non-blackbox
+# control-plane closure (leaves first, top last -- the same proven two-pass
+# pattern as the NORMAL flow) and writes every mapped body plus the compute/
+# SRAM blackbox stubs into build/ppa_closure_top.v.  The compute leaves stay
+# blackboxed, so measurement_scope stays PARTIAL_HIERARCHICAL and
+# sta_crit_path_ps is a control-plane pre-layout path, never a full-chip Fmax.
+#
+# Round-62 (harness fix): mla_kv_cache (the only memory-bearing submodule in
+# this closure) is now read as a (-lib) blackbox stub that
+# scripts/remote_yosys_round.sh appends to the closure partition's
+# build/ppa_bb_<name>.v -- the prologue `blackbox m:*mla_kv_cache*` does NOT
+# empty a module body in this Yosys build, so without the -lib stub the
+# whole-design `memory_map` below expanded its $paramod$ body into ~245,760
+# write-mux/$dff cells and the following whole-closure write_verilog dropped
+# every control-plane body (sta_body_check 6/6 missing).  With the stub the
+# body never enters the closure netlist: its instances stay timing blackboxes
+# and the write set is small enough for the six bodies to land.  The 245,760
+# bits remain counted under the cp_fsm partition's real body; top_level_sta's
+# own memory row is excluded from the aggregate, so no SRAM bit is lost.
+# Pass 1: map every non-top module of the closure (the control-plane leaves)
+# independently, then the top's glue in pass 2.  Blackboxed modules (the
+# compute leaves and mla_kv_cache) are skipped by techmap/abc automatically.
+select @PART_TOP@ %n
+techmap
+clean
+log "CLOCK_TARGET_NS=10.0 @PART_TAG@ ABC_D10000 PRE_LAYOUT_ESTIMATE"
+# 2026-09-10 fanout repair: `buffer` builds the library buffer tree on the
+# mapped netlist before `stime`. See the note right before `design -reset`.
+# 2026-09-10 flop-Q PI handover (see the note before `# ===CLOSURE_FLOW_BEGIN===`):
+# `dfflibmap` now runs BEFORE the `abc` below, which no longer carries `-dff`, so
+# the flops are mapped to the same Liberty's `DFF_X1`/`DFFR_X1` cells first and
+# their Q nets reach ABC on the CI/PI side -- the precondition this round's
+# `buffer` test needs.
+dfflibmap -liberty LIB
+abc -liberty LIB -D 10000 -constr build/ppa_measure.constr -script +strash;map;topo;buffer,-p;stime
+log "CLOSURE_LEAF_ABC_DONE=@PART_TAG@"
+clean
+memory_collect
+tee -o build/ppa_measure.@PART_TAG@.closure_leaf_area.stat
+stat -liberty LIB
+log "CLOSURE_LEAF_AREA_DONE=@PART_TAG@"
+# Pass 2: map the closure top LAST.  Its control-plane submodule instances are
+# already-mapped blackboxes, so this reports/maps the top's own glue only.
+select @PART_TOP@
+techmap
+clean
+tee -o build/ppa_measure.@PART_TAG@.closure_pre_abc.stat
+stat
+log "CLOSURE_PRE_ABC_STAT_DONE=@PART_TAG@"
+# 2026-09-10 fanout repair: `buffer` (see the note before `design -reset`).
+# 2026-09-10 flop-Q PI handover: `dfflibmap` now runs BEFORE this `abc` (no
+# `-dff`).  The pre-ABC `stat` above still shows the unmapped
+# `$_DFF_PN0_`/`$_DFF_P_` cells, and the post-`dfflibmap` `stat -liberty` below
+# must still show the same `DFFR_X1`/`DFF_X1` counts.
+dfflibmap -liberty LIB
+abc -liberty LIB -D 10000 -constr build/ppa_measure.constr -script +strash;map;topo;buffer,-p;stime
+log "CLOSURE_ABC_DONE=@PART_TAG@"
+clean
+memory_collect
+tee -o build/ppa_measure.@PART_TAG@.closure_area.stat
+stat -liberty LIB
+log "CLOSURE_AREA_DONE=@PART_TAG@"
+# Round-71 (closure export repair): Yosys 0.64 defines `%n` as *selection
+# inversion*, not hierarchy descent, and `write_verilog -blackboxes` writes
+# only blackbox modules.  The old `select <top> %n; select -add <top>; write
+# -selected -blackboxes` therefore produced a 121-byte comment-only closure
+# even though the mapped control-plane cells still existed in memory.  Build a
+# whole-module transitive closure explicitly with `%s` (modules implementing
+# selected cells), then export only those complete real modules.  The STA
+# post-processing path appends any missing compute/SRAM timing-blackbox stubs;
+# they must not replace the real closure body at this write point.
+# Round-73 (harness repair): `read_liberty -lib LIB` is NOT needed here and is
+# removed.  The liberty was already loaded by the pass-1/pass-2
+# `dfflibmap -liberty LIB` / `abc -liberty LIB` above, and its 135 cell types
+# are cell-library entries, not `%s`-reachable submodules -- `select -list-mod`
+# confirms the closure still resolves to exactly the 8 real hierarchy modules
+# (sta_closure_module_count=8), so this line could never change the closure
+# write set.  It was a leftover from the Round-67 "register standard cells"
+# hypothesis, which Round-71 already superseded: the body loss was caused by
+# the pre-Round-71 `hierarchy -top` pruning, not by unregistered cells.
+select -clear
+memory_map
+select -set closure_modules @PART_TOP@
+# A fixed depth is intentional and bounded.  This closure has fewer than 12
+# RTL hierarchy levels; each expansion is monotonic, so later passes are
+# no-ops once the transitive module set is complete.
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select -set closure_modules @closure_modules %c %s %u
+select @closure_modules
+log "CLOSURE_WRITE_MODULE_LIST_BEGIN=@PART_TAG@"
+select -list-mod
+log "CLOSURE_WRITE_MODULE_LIST_END=@PART_TAG@"
+tee -o build/ppa_measure.@PART_TAG@.closure_write_pre.stat stat
+write_verilog -selected build/ppa_closure_top.v
+log "CLOSURE_NETLIST_WRITTEN=@PART_TAG@"
+log "MEASURE_PARTITION=@PART_TAG@"
+log "MEASUREMENT_SCOPE=@PART_SCOPE@"
+# ===CLOSURE_FLOW_END===
+# ===NORMAL_FLOW_BEGIN===
+# Round-21 (measurement completion): the global `techmap` that previously
+# expanded EVERY module of the partition at once is removed.  Round-08 evidence
+# showed the QK^T path (mla_attention_head's 48-term 24-bit signed dot-product
+# array) expanding into a whole column of $fa/$alu/$lcu_brent_kung template
+# instances inside that shared techmap ("No more expansions possible") before
+# any per-module ABC started, so a timeout discarded every module's area.  The
+# techmap below now runs per pass, immediately before that pass's own abc
+# window: the leaves' small netlists are expanded/mapped first and their area
+# emitted, then the top is expanded alone in its own bounded window.  A heavy
+# top can no longer flood the leaves' shared netlist or discard their real area.
+# Pass 1: map every non-top module (the leaves) independently, then emit their
+# area immediately.  The complement %n of the bare top-module pattern selects
+# all other modules whole; blackbox modules are excluded automatically, so the
+# control-plane closure's blackboxed leaves are not mapped here.
+select @PART_TOP@ %n
+techmap
+clean
+# Per-pass pre-ABC cell-count stat on this pass's techmapped netlist: keeps the
+# round-04 "heaviest leaf" evidence (e.g. sigmoid_from_q14_mod = 419,612 cells)
+# per pass.  It emits "Number of cells" per selected module only -- no "Chip
+# area" line and no $mem_v2 memory bits -- so it does not disturb the
+# area/memory greps downstream.
+tee -o build/ppa_measure.@PART_TAG@.leaf_pre_abc.stat
+stat
+log "LEAF_PRE_ABC_STAT_DONE=@PART_TAG@"
+# Round-47: same 10 ns ABC target as the top/closure passes (see
+# CLOCK_TARGET_NS marker above / below).
+log "CLOCK_TARGET_NS=10.0 @PART_TAG@ ABC_D10000 PRE_LAYOUT_ESTIMATE"
+# 2026-09-10 fanout repair: `buffer` (see the note before `design -reset`).
+# 2026-09-10 flop-Q PI handover (see the note before `# ===CLOSURE_FLOW_BEGIN===`):
+# `dfflibmap` now runs BEFORE the `abc` below, which no longer carries `-dff`, so
+# the flops are mapped to the same Liberty's `DFF_X1`/`DFFR_X1` cells first and
+# their Q nets reach ABC on the CI/PI side; the pre-ABC `stat` above still shows
+# those unmapped flop cells.
+dfflibmap -liberty LIB
+abc -liberty LIB -D 10000 -constr build/ppa_measure.constr -script +strash;map;topo;buffer,-p;stime
+log "LEAF_ABC_DONE=@PART_TAG@"
+clean
+memory_collect
+tee -o build/ppa_measure.@PART_TAG@.leaf_area.stat
+stat -liberty LIB
+log "LEAF_AREA_DONE=@PART_TAG@"
+# Pass 2: map the partition top LAST in its own bounded window.  Its submodule
+# instances are already-mapped blackboxes, so this reports the top's own gates.
+# The top's arithmetic is techmapped only now -- this is the window where a
+# heavy top (e.g. the QK^T multiplier array) is expanded and mapped, isolated
+# from the leaves by the per-pass structure above.
+select @PART_TOP@
+techmap
+clean
+tee -o build/ppa_measure.@PART_TAG@.top_pre_abc.stat
+stat
+log "TOP_PRE_ABC_STAT_DONE=@PART_TAG@"
+# 2026-09-10 fanout repair: `buffer` (see the note before `design -reset`).
+# 2026-09-10 flop-Q PI handover (same as the leaf pass above): `dfflibmap` now
+# runs BEFORE this `abc` (no `-dff`).  The pre-ABC `stat` still shows the
+# unmapped flop cells and the post-`dfflibmap` `stat -liberty` below must still
+# show the same `DFFR_X1`/`DFF_X1` counts.
+dfflibmap -liberty LIB
+abc -liberty LIB -D 10000 -constr build/ppa_measure.constr -script +strash;map;topo;buffer,-p;stime
+log "TOP_ABC_DONE=@PART_TAG@"
+clean
+memory_collect
+tee -o build/ppa_measure.@PART_TAG@.top_area.stat
+stat -liberty LIB
+log "TOP_AREA_DONE=@PART_TAG@"
+# Round-48 (measurement completion, harness fix): map the collected $mem_v2
+# ROMs (the PWL case-table lookups that `memory_bmux2rom` turned into $mem
+# during the `memory -nomap` lowering) back into combinational mux logic
+# IMMEDIATELY BEFORE the netlist write.  This runs AFTER the top_area stat
+# above, so this partition's area/timing/memory-bit accounting is already on
+# record and is NOT changed.  Without it, `write_verilog` emits each ROM as a
+# behavioral `reg [...] mem [...]` + `initial begin ... end` block, which the
+# post-partition OpenSTA/OpenROAD structural reader rejects as STA-0171 (first
+# observed on build/ppa_mapped_decay_from_sigmoid_mod.v:22315).  After
+# `memory_map` the ROM becomes $mux/$pmux cells that `write_verilog` emits as
+# structural `assign` expressions.  `select -clear` first so memory_map covers
+# the WHOLE partition (leaves included), not just the stale top-only selection
+# that survived pass-2 techmap/abc/clean.
+select -clear
+memory_map
+# Round-59 (harness repair): after `select -clear` (required so `memory_map`
+# covers the WHOLE partition) this Yosys build's `write_verilog` follows the
+# CURRENT selection -- even WITHOUT `-selected` -- so an emptied selection
+# emits no module body (Round-55 evidence, questionAndsolution.md).  Round-58
+# tried `write_verilog` without `-selected` on that empty selection and would
+# repeat the Round-55 empty write; Round-56's `select *` re-selection was also
+# not reliable (Round-57 still raised ORD-2013 "LEF master mem_arbiter4 not
+# found" with all six partitions exiting 0 and mem_arbiter4 area measured).
+# Re-select the WHOLE partition with the SAME proven pass-1/pass-2 patterns
+# (`<top> %n` = every leaf module, then `-add <top>` = the top), then write
+# the selected modules plus blackbox stubs.  `-noattr` is dropped so the
+# `(* blackbox *)` marker on the `-blackboxes` stubs survives: an empty stub
+# without that marker is a missing-LEF leaf (ORD-2013) rather than a linkable
+# timing blackbox.  The assembled combined netlist is verified by the
+# STA_BODY_CHECK= markers in scripts/remote_yosys_round.sh.
+select @PART_TOP@ %n
+select -add @PART_TOP@
+write_verilog -selected -blackboxes build/ppa_mapped_@PART_TAG@.v
+log "MAPPED_NETLIST_WRITTEN=@PART_TAG@"
+log "MEASURE_PARTITION=@PART_TAG@"
+log "MEASUREMENT_SCOPE=PARTIAL_HIERARCHICAL"
+# ===NORMAL_FLOW_END===

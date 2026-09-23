@@ -18,8 +18,15 @@ module q4_embedding_lookup #(
   logic [7:0] packed_byte;
   logic [3:0] q4, zero_point;
   logic signed [15:0] scale_q12;
-  logic signed [63:0] product;
-  integer signed delta;
+  // Narrowed from the full 32-bit integer delta / 64-bit product: q4 and
+  // zero_point are 4-bit nibbles, so delta = q4 - zero_point has real range
+  // [-15, 15].  The former wide types made every one of the DIM=64 multiplies
+  // expand as 32x16->64 in Yosys techmap (stuck at pass 61.2).  6-bit signed
+  // delta and a parameter-derived PRODUCT_W keep the exact value range, so the
+  // low DATA_W output bits stay bit-identical to the old 64-bit datapath.
+  localparam int PRODUCT_W = 6 + 16 + ((FRAC_W >= 12) ? FRAC_W - 12 : 0);
+  logic signed [PRODUCT_W-1:0] product;
+  logic signed [5:0] delta;
 
   always_comb begin
     embedding_bus = '0;

@@ -2,8 +2,11 @@
 # View the currently active server-side harness run without downloading artifacts.
 set -euo pipefail
 
-REMOTE_HOST="txjg7-2@192.168.0.13"
-REMOTE_PROJECT="/home/txjg7-2/ic-project/k3harness"
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+eval "$(python3 "$ROOT/harness/environment.py" --shell)"
+REMOTE_HOST=$HARNESS_REMOTE_HOST
+REMOTE_PROJECT=$HARNESS_REMOTE_PROJECT
+CONTAINER=$HARNESS_CONTAINER
 FOLLOW=0
 if [[ "${1:-}" == "--follow" ]]; then FOLLOW=1; fi
 if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--follow" ) ]]; then
@@ -13,9 +16,11 @@ fi
 
 if [[ "$FOLLOW" == "0" ]]; then
   ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE_HOST" \
-    "printf '%s\\n' '--- current harness status ---'; \
+    "printf '%s\\n' '--- task-02 controller status ---'; \
+     if [ -f '$REMOTE_PROJECT/status/task02_agent.status' ]; then cat '$REMOTE_PROJECT/status/task02_agent.status'; else echo 'no controller state published yet'; fi; \
+     printf '%s\\n' '--- current harness status ---'; \
      if [ -f '$REMOTE_PROJECT/status/current.status' ]; then cat '$REMOTE_PROJECT/status/current.status'; else echo 'no run has started yet'; fi; \
-     printf '%s\\n' '--- container ---'; docker ps --filter name=k3demo-eda --format '{{.Names}} {{.Status}}'"
+     printf '%s\\n' '--- container ---'; docker ps --filter name='$CONTAINER' --format '{{.Names}} {{.Status}}'"
   exit 0
 fi
 

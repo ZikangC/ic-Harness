@@ -1,0 +1,37 @@
+# Task 02 macro-blackbox measurement template: used for partitions declared
+# `macro_blackbox = true` in harness/ppa.toml (currently q4_embedding_lookup
+# and kda_recurrence_contract).  scripts/remote_yosys_round.sh substitutes
+# @PART_TAG@/@PART_TOP@/@PART_CHPARAM@/@PART_BLACKBOX@/@READFILES@ and runs
+# each macro partition under its own timeout, exactly like ppa_measure.ys --
+# except this template ENDS at the memory-stat/marker block and deliberately
+# has NO techmap/ABC and NO `exit` command.
+#
+# Round-35 (synthesis-usability repair): the previous Round-34 flow injected
+# `...; exit 0` into ppa_measure.ys for macro partitions.  The per-partition
+# logs showed "ERROR: No such command: exit" and rc=1 for both macro
+# partitions (q4_embedding_lookup, kda_recurrence_contract) because this
+# container's Yosys build has no `exit` command in script mode -- the macro
+# markers and memory-stat were written, but the partition exited 1.  This
+# template runs the same RTL read / hierarchy / proc/fsm lowering / early
+# `stat` (which reports the $mem bits) / `memory -nomap`, logs the macro
+# markers, and then simply reaches EOF: Yosys exits 0 cleanly with no mapping
+# attempted.
+#
+# The flattened 9,224,192-bit KDA memory would otherwise map to ~792k gates /
+# 26 us wire-load and destroy the 10 ns comparison; by stopping before
+# techmap/ABC these partitions report their SRAM/ROM capacity only (accounted
+# by the macro model ~1 Mbit/mm2), never a standard-cell logic area.
+design -reset
+@PART_BLACKBOX@
+read_verilog -sv -defer @READFILES@
+hierarchy -check -top @PART_TOP@ @PART_CHPARAM@
+log "=== PARTITION @PART_TAG@: macro hierarchy done (no flatten) ==="
+log "PARTITION_BLACKBOX=@PART_BLACKBOX_LIST@"
+proc; opt -fast; fsm; opt -fast
+stat
+log "MEMORY_STAT_COMPLETE=@PART_TAG@"
+memory -nomap; opt -fast
+log "=== PARTITION @PART_TAG@: macro lowering done (no techmap/ABC) ==="
+log "MACRO_BLACKBOX_DONE=@PART_TAG@"
+log "MEASURE_PARTITION=@PART_TAG@"
+log "MEASUREMENT_SCOPE=PARTIAL_HIERARCHICAL"

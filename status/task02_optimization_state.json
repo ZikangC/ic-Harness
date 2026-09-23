@@ -1,0 +1,75 @@
+{
+  "schema_version": 4,
+  "phase": "idle",
+  "mainline": {
+    "kind": "blackbox_expansion",
+    "status": "verification_pending",
+    "target": "q4_dequant_matvec_ch"
+  },
+  "current_candidate": null,
+  "accepted": [],
+  "rejected": [],
+  "max_repair_attempts": 2,
+  "next_action": "resume_mainline",
+  "gate_api_version": 4,
+  "skill": "rtl-optimization-triage",
+  "acceptance_debt": [],
+  "deferred": [
+    {
+      "module": "q4_dequant_matvec_ch",
+      "hypothesis": "closure_resource_blocked：top_level_sta 闭包测量 exit 137（OOM/截断），非导出缺陷；strategy_change_required=true。retry/increase_budget/continue 重复闭包测量被禁；closure_repair_required=false 使 repair_harness/revise_task_card 未授权；sta_link_result=未测得、sta_timing_measured=false 使 expand_blackbox 前提不成立。optimization_gate.insertion.allowed=true，allowed_modules 含 q4_dequant_matvec_ch（待展开黑盒=recommended_candidate），next_action=optimize_rtl。无量化时序瓶颈（STA 未测得），此为针对 OOM 资源瓶颈的源码价值判断，不把测量不完整写成 RTL 失败。",
+      "checkpoint_id": "20260918-094319-64594-cycle1-q4_dequant_matvec_ch",
+      "repair_attempts": 0,
+      "integration_target": "q4_dequant_matvec_ch",
+      "insertion_mode": "fused_same_unit",
+      "resume_token": {
+        "registry_generation": 23,
+        "pending_blackbox_expansion": {
+          "module": "q4_dequant_matvec_ch",
+          "partition": "top_level_sta",
+          "summary": "模块登记簿恢复了未完成的黑盒展开验证；必须先完成或确认基础设施不确定。",
+          "config_path": "harness/ppa.toml"
+        }
+      },
+      "top_level_acceptance_required": true,
+      "measurement_retries": 0,
+      "rtl_fingerprint": null,
+      "functional_evidence": null,
+      "sta_scope_gate": null,
+      "measurement_partitions": [],
+      "measurement_timeout_seconds": null,
+      "reason": "pro_selected_measurement_defer"
+    }
+  ],
+  "max_measurement_retries": 2,
+  "execution_contract": {
+    "schema_version": 1,
+    "contract_kind": "optimization_state",
+    "enforcement": "advisory",
+    "current_phase": "idle",
+    "applies_to_actions": [],
+    "allowed_actions": [],
+    "forbidden_actions": [],
+    "action_parameters": {},
+    "execution_profiles": {},
+    "hard_constraints": {
+      "candidate_module": null,
+      "candidate_id": null,
+      "same_candidate_only": false,
+      "no_edit_during_measurement": false
+    },
+    "recommended_actions": [],
+    "strategic_questions": [],
+    "retry_budget": {
+      "measurement_retries_used": 0,
+      "measurement_retries_max": 2,
+      "measurement_retries_remaining": 2,
+      "infrastructure_failures_consume_measurement_retry": false
+    },
+    "resume_context": {
+      "kind": "blackbox_expansion",
+      "status": "verification_pending",
+      "target": "q4_dequant_matvec_ch"
+    }
+  }
+}

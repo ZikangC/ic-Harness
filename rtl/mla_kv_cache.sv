@@ -17,39 +17,32 @@ module mla_kv_cache #(
   output logic signed [HEADS*KD*DATA_W-1:0]  read_key_bus,
   output logic signed [HEADS*DV*DATA_W-1:0]  read_value_bus
 );
-  logic signed [DATA_W-1:0] key_mem   [0:MAX_SEQ-1][0:HEADS-1][0:KD-1];
-  logic signed [DATA_W-1:0] value_mem [0:MAX_SEQ-1][0:HEADS-1][0:DV-1];
-  integer head_read, dim_read;
-  integer pos_reset, head_reset, dim_reset;
-  integer head_write, dim_write;
+  // Packed per-token rows.  Bit (h*KD+d)*DATA_W +: DATA_W of key_mem[t] is the
+  // former (h,d) slice of the old 3D array, so the mapping is bit-identical;
+  // each array now has exactly one write port and one read port.  The old
+  // per-head/dim slicing became HEADS*(KD+DV) independent write ports in
+  // Yosys `proc` and exploded MEMORY_BMUX2ROM/MEMORY_DFF under `memory -nomap`;
+  // the packed form lets `memory_collect` close the `$mem` in one shot while
+  // staying a `$mem` for SRAM macro accounting.
+  logic signed [HEADS*KD*DATA_W-1:0] key_mem   [0:MAX_SEQ-1];
+  logic signed [HEADS*DV*DATA_W-1:0] value_mem [0:MAX_SEQ-1];
 
   always_comb begin
-    read_key_bus = '0;
-    read_value_bus = '0;
-    for (head_read = 0; head_read < HEADS; head_read = head_read + 1) begin
-      for (dim_read = 0; dim_read < KD; dim_read = dim_read + 1)
-        read_key_bus[(head_read*KD + dim_read)*DATA_W +: DATA_W] = key_mem[read_pos][head_read][dim_read];
-      for (dim_read = 0; dim_read < DV; dim_read = dim_read + 1)
-        read_value_bus[(head_read*DV + dim_read)*DATA_W +: DATA_W] = value_mem[read_pos][head_read][dim_read];
-    end
+    read_key_bus   = key_mem[read_pos];
+    read_value_bus = value_mem[read_pos];
   end
 
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      for (pos_reset = 0; pos_reset < MAX_SEQ; pos_reset = pos_reset + 1)
-        for (head_reset = 0; head_reset < HEADS; head_reset = head_reset + 1) begin
-          for (dim_reset = 0; dim_reset < KD; dim_reset = dim_reset + 1)
-            key_mem[pos_reset][head_reset][dim_reset] <= '0;
-          for (dim_reset = 0; dim_reset < DV; dim_reset = dim_reset + 1)
-            value_mem[pos_reset][head_reset][dim_reset] <= '0;
-        end
-    end else if (write_valid) begin
-      for (head_write = 0; head_write < HEADS; head_write = head_write + 1) begin
-        for (dim_write = 0; dim_write < KD; dim_write = dim_write + 1)
-          key_mem[write_pos][head_write][dim_write] <= write_key_bus[(head_write*KD + dim_write)*DATA_W +: DATA_W];
-        for (dim_write = 0; dim_write < DV; dim_write = dim_write + 1)
-          value_mem[write_pos][head_write][dim_write] <= write_value_bus[(head_write*DV + dim_write)*DATA_W +: DATA_W];
-      end
+  // Deliberately no reset on the storage arrays.  Every read position is
+  // written before it is read (datapath adapter: ST_MCACHE writes the current
+  // token before ST_MSTART scans [0..pos]; contract module: WRITE before
+  // ATTEND), so stale power-up data is never observed.  Clearing all
+  // MAX_SEQ*HEADS*(KD+DV) words on reset expands to a per-bit reset mux in
+  // Yosys `proc` (PROC_MUX), which stalled synthesis; the arrays are instead
+  // collected as SRAM ($mem) for the macro-accounting measurement.
+  always_ff @(posedge clk) begin
+    if (write_valid) begin
+      key_mem[write_pos]   <= write_key_bus;
+      value_mem[write_pos] <= write_value_bus;
     end
   end
 endmodule

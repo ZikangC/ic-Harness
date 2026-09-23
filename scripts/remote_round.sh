@@ -5,9 +5,11 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K3DEMO_DIR="$(cd "$PROJECT_DIR/../k3demo" && pwd)"
-REMOTE_HOST="txjg7-2@192.168.0.13"
-REMOTE_PROJECT="/home/txjg7-2/ic-project/k3harness"
-CONTAINER="k3demo-eda"
+eval "$(python3 "$PROJECT_DIR/harness/environment.py" --shell)"
+REMOTE_HOST=$HARNESS_REMOTE_HOST
+REMOTE_PROJECT=$HARNESS_REMOTE_PROJECT
+CONTAINER=$HARNESS_CONTAINER
+CONTAINER_WORKDIR=$HARNESS_CONTAINER_WORKDIR
 
 TASK=""
 SEED="20260706"
@@ -80,7 +82,7 @@ mkdir -p "$LOCAL_RUN"
 write_remote_status "running"
 set +e
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE_HOST" \
-  "docker exec -w /work/k3harness '$CONTAINER' python3 harness/run.py --task '$TASK' --seed '$SEED' --prompt '$PROMPT' --group-size '$GROUP_SIZE' ${SEQ_LEN:+--seq-len '$SEQ_LEN'} --run-id '$RUN_ID'" \
+  "docker exec -w '$CONTAINER_WORKDIR' '$CONTAINER' python3 harness/run.py --task '$TASK' --seed '$SEED' --prompt '$PROMPT' --group-size '$GROUP_SIZE' ${SEQ_LEN:+--seq-len '$SEQ_LEN'} --run-id '$RUN_ID'" \
   >"$LOCAL_RUN/remote_console.log" 2>&1
 REMOTE_RC=$?
 set -e
@@ -92,7 +94,7 @@ else
   # original simulation exit status with a diagnostic tool's status.
   ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE_HOST" \
     "mkdir -p '$REMOTE_PROJECT/runs/$RUN_ID/diagnostics'; \
-     docker exec -w /work/k3harness '$CONTAINER' sh harness/diagnose.sh auto '$RUN_ID' '$SEED' '$PROMPT' '$GROUP_SIZE' \
+     docker exec -w '$CONTAINER_WORKDIR' '$CONTAINER' sh harness/diagnose.sh auto '$RUN_ID' '$SEED' '$PROMPT' '$GROUP_SIZE' \
        > '$REMOTE_PROJECT/runs/$RUN_ID/diagnostics/auto.log' 2>&1 || true"
   write_remote_status "failed" "$REMOTE_RC"
 fi

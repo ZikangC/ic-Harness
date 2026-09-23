@@ -1,3 +1,7 @@
+[controller]
+# 可替换的项目边界。通用 supervisor 不应直接依赖 Task-02 Skill 状态结构。
+project_adapter = "task02_project_adapter:Task02ProjectAdapter"
+
 [reference]
 # 此配置由服务器容器在 /work/k3harness 下读取。下列 reference 文件由
 # scripts/remote_round.sh 从本机 k3demo 精确同步；运行工具统一位于
@@ -13,8 +17,12 @@ argmax_agree_min = 0.99
 
 [verification]
 # Golden 顶层契约来自 standalone_rtl：标准 FNV descriptor ABI、完整 decoder
-# 和 result 写回。每轮仅更换 build/image/dump 路径，不改变编译命令。
-command = "mkdir -p {build_dir}/obj_dir && verilator --binary --timing -Wall -Wno-fatal -j 1 -f rtl/filelist.f tb/tb_nano_golden_decoder_top.sv --top-module tb_nano_golden_decoder_top -Mdir {build_dir}/obj_dir && {build_dir}/obj_dir/Vtb_nano_golden_decoder_top +IMAGE={image} +DUMP={dump}"
+# 和 result 写回。编译缓存按 RTL、TB、配置和 Verilator 命令内容哈希；仅改变
+# image、dump 或 token 数时会直接复用服务器端可执行文件。
+cache_dir = "build/verilator-cache"
+verilator_jobs = 32
+build_command = "mkdir -p {cache_dir}/obj_dir && verilator --binary --timing -Wall -Wno-fatal -j {verilator_jobs} -f rtl/filelist.f tb/tb_nano_golden_decoder_top.sv --top-module tb_nano_golden_decoder_top -Mdir {cache_dir}/obj_dir"
+simulation_command = "{cache_dir}/obj_dir/Vtb_nano_golden_decoder_top +IMAGE={image} +DUMP={dump}"
 # 覆盖 Verilator 编译与完整仿真的总墙钟时间。prompt 0 有 48 token；2026-08-21
 # 实测 1800 秒只执行到 pos26。5000 秒（约 83 分钟）是完整 prompt 0 回归的
 # 异常保护线：留出正常服务器负载波动；超过此时间才视作疑似停滞。

@@ -54,194 +54,48 @@ module kda_recurrence_contract #(
     end
   endgenerate
 
-  // Linear interpolation helper shared by the alpha PWL fits below.
-  function automatic logic signed [63:0] pwl_lerp(
-      input logic signed [63:0] x_value,
-      input logic signed [63:0] x0,
-      input logic signed [63:0] x1,
-      input logic signed [63:0] y0,
-      input logic signed [63:0] y1
-  );
-    pwl_lerp = y0 + ((x_value - x0) * (y1 - y0)) / (x1 - x0);
-  endfunction
+  // alpha path per lane:  alpha_product = A * (f + (dtb <<< 3));
+  // gate_argument = alpha_product >>> 8; gate_sigmoid = sigmoid_from_q14;
+  // alpha_bus = decay_from_sigmoid.  The two PWL fits are parameterized
+  // modules instantiated once per lane (2 heads x 32 lanes) below, so each
+  // lerp forest is synthesized as a single module body shared by the 64
+  // instances instead of being function-inlined 64 times into this module
+  // (which previously exploded the techmap cell count and stalled).
 
-  // PWL interpolation for exp(-5*s), s in unsigned Q1.14.  The previous
-  // twenty-two breakpoints left ~0.0046 error near s=0; after the dense
-  // sigmoid fit above this is the remaining alpha-path approximation error.
-  // exp(-5*s) is sampled every 0.02 (50 segments), exact at each sample,
-  // monotonic and bounded.
-  function automatic logic signed [DATA_W-1:0] decay_from_sigmoid(input logic [FRAC_W:0] s_in);
-    logic signed [63:0] s;
-    logic signed [63:0] y;
-    begin
-      s = $signed({1'b0, s_in});
-      if (s <= 328) y = pwl_lerp(s, 0, 328, 16384, 14825);
-      else if (s <= 655) y = pwl_lerp(s, 328, 655, 14825, 13414);
-      else if (s <= 983) y = pwl_lerp(s, 655, 983, 13414, 12138);
-      else if (s <= 1311) y = pwl_lerp(s, 983, 1311, 12138, 10983);
-      else if (s <= 1638) y = pwl_lerp(s, 1311, 1638, 10983, 9937);
-      else if (s <= 1966) y = pwl_lerp(s, 1638, 1966, 9937, 8992);
-      else if (s <= 2294) y = pwl_lerp(s, 1966, 2294, 8992, 8136);
-      else if (s <= 2621) y = pwl_lerp(s, 2294, 2621, 8136, 7362);
-      else if (s <= 2949) y = pwl_lerp(s, 2621, 2949, 7362, 6661);
-      else if (s <= 3277) y = pwl_lerp(s, 2949, 3277, 6661, 6027);
-      else if (s <= 3604) y = pwl_lerp(s, 3277, 3604, 6027, 5454);
-      else if (s <= 3932) y = pwl_lerp(s, 3604, 3932, 5454, 4935);
-      else if (s <= 4260) y = pwl_lerp(s, 3932, 4260, 4935, 4465);
-      else if (s <= 4588) y = pwl_lerp(s, 4260, 4588, 4465, 4040);
-      else if (s <= 4915) y = pwl_lerp(s, 4588, 4915, 4040, 3656);
-      else if (s <= 5243) y = pwl_lerp(s, 4915, 5243, 3656, 3308);
-      else if (s <= 5571) y = pwl_lerp(s, 5243, 5571, 3308, 2993);
-      else if (s <= 5898) y = pwl_lerp(s, 5571, 5898, 2993, 2708);
-      else if (s <= 6226) y = pwl_lerp(s, 5898, 6226, 2708, 2451);
-      else if (s <= 6554) y = pwl_lerp(s, 6226, 6554, 2451, 2217);
-      else if (s <= 6881) y = pwl_lerp(s, 6554, 6881, 2217, 2006);
-      else if (s <= 7209) y = pwl_lerp(s, 6881, 7209, 2006, 1815);
-      else if (s <= 7537) y = pwl_lerp(s, 7209, 7537, 1815, 1643);
-      else if (s <= 7864) y = pwl_lerp(s, 7537, 7864, 1643, 1486);
-      else if (s <= 8192) y = pwl_lerp(s, 7864, 8192, 1486, 1345);
-      else if (s <= 8520) y = pwl_lerp(s, 8192, 8520, 1345, 1217);
-      else if (s <= 8847) y = pwl_lerp(s, 8520, 8847, 1217, 1101);
-      else if (s <= 9175) y = pwl_lerp(s, 8847, 9175, 1101, 996);
-      else if (s <= 9503) y = pwl_lerp(s, 9175, 9503, 996, 902);
-      else if (s <= 9830) y = pwl_lerp(s, 9503, 9830, 902, 816);
-      else if (s <= 10158) y = pwl_lerp(s, 9830, 10158, 816, 738);
-      else if (s <= 10486) y = pwl_lerp(s, 10158, 10486, 738, 668);
-      else if (s <= 10813) y = pwl_lerp(s, 10486, 10813, 668, 604);
-      else if (s <= 11141) y = pwl_lerp(s, 10813, 11141, 604, 547);
-      else if (s <= 11469) y = pwl_lerp(s, 11141, 11469, 547, 495);
-      else if (s <= 11796) y = pwl_lerp(s, 11469, 11796, 495, 448);
-      else if (s <= 12124) y = pwl_lerp(s, 11796, 12124, 448, 405);
-      else if (s <= 12452) y = pwl_lerp(s, 12124, 12452, 405, 367);
-      else if (s <= 12780) y = pwl_lerp(s, 12452, 12780, 367, 332);
-      else if (s <= 13107) y = pwl_lerp(s, 12780, 13107, 332, 300);
-      else if (s <= 13435) y = pwl_lerp(s, 13107, 13435, 300, 272);
-      else if (s <= 13763) y = pwl_lerp(s, 13435, 13763, 272, 246);
-      else if (s <= 14090) y = pwl_lerp(s, 13763, 14090, 246, 222);
-      else if (s <= 14418) y = pwl_lerp(s, 14090, 14418, 222, 201);
-      else if (s <= 14746) y = pwl_lerp(s, 14418, 14746, 201, 182);
-      else if (s <= 15073) y = pwl_lerp(s, 14746, 15073, 182, 165);
-      else if (s <= 15401) y = pwl_lerp(s, 15073, 15401, 165, 149);
-      else if (s <= 15729) y = pwl_lerp(s, 15401, 15729, 149, 135);
-      else if (s <= 16056) y = pwl_lerp(s, 15729, 16056, 135, 122);
-      else y = pwl_lerp(s, 16056, 16384, 122, 110);
-      if (y < 110) y = 110;
-      decay_from_sigmoid = y;
-    end
-  endfunction
-
-  // Dense sigmoid PWL for the alpha path.  alpha = exp(-5*sigmoid(...)) is
-  // five times as sensitive to a sigmoid error as to a decay error, so the
-  // previous 21-segment fit (0.5 spacing between -2 and -1 and between 1 and
-  // 2) still produced ~0.02 alpha error at |x|~2.4.  This fit samples
-  // sigmoid every 0.125 over [-4,4] and every 0.25 in the [-6,-4]/[4,6]
-  // tails, reducing the alpha error to <0.002.  It matches sigmoid_pwl.
-  function automatic logic [FRAC_W:0] sigmoid_from_q14(input logic signed [63:0] x);
-    logic signed [63:0] y;
-    begin
-      if (x <= -131072) y = 5;
-      else if (x <= -98304) y = pwl_lerp(x, -131072, -98304, 5, 41);
-      else if (x <= -94208) y = pwl_lerp(x, -98304, -94208, 41, 52);
-      else if (x <= -90112) y = pwl_lerp(x, -94208, -90112, 52, 67);
-      else if (x <= -86016) y = pwl_lerp(x, -90112, -86016, 67, 86);
-      else if (x <= -81920) y = pwl_lerp(x, -86016, -81920, 86, 110);
-      else if (x <= -77824) y = pwl_lerp(x, -81920, -77824, 110, 141);
-      else if (x <= -73728) y = pwl_lerp(x, -77824, -73728, 141, 180);
-      else if (x <= -69632) y = pwl_lerp(x, -73728, -69632, 180, 230);
-      else if (x <= -65536) y = pwl_lerp(x, -69632, -65536, 230, 295);
-      else if (x <= -63488) y = pwl_lerp(x, -65536, -63488, 295, 333);
-      else if (x <= -61440) y = pwl_lerp(x, -63488, -61440, 333, 376);
-      else if (x <= -59392) y = pwl_lerp(x, -61440, -59392, 376, 425);
-      else if (x <= -57344) y = pwl_lerp(x, -59392, -57344, 425, 480);
-      else if (x <= -55296) y = pwl_lerp(x, -57344, -55296, 480, 542);
-      else if (x <= -53248) y = pwl_lerp(x, -55296, -53248, 542, 612);
-      else if (x <= -51200) y = pwl_lerp(x, -53248, -51200, 612, 690);
-      else if (x <= -49152) y = pwl_lerp(x, -51200, -49152, 690, 777);
-      else if (x <= -47104) y = pwl_lerp(x, -49152, -47104, 777, 875);
-      else if (x <= -45056) y = pwl_lerp(x, -47104, -45056, 875, 984);
-      else if (x <= -43008) y = pwl_lerp(x, -45056, -43008, 984, 1107);
-      else if (x <= -40960) y = pwl_lerp(x, -43008, -40960, 1107, 1243);
-      else if (x <= -38912) y = pwl_lerp(x, -40960, -38912, 1243, 1394);
-      else if (x <= -36864) y = pwl_lerp(x, -38912, -36864, 1394, 1562);
-      else if (x <= -34816) y = pwl_lerp(x, -36864, -34816, 1562, 1748);
-      else if (x <= -32768) y = pwl_lerp(x, -34816, -32768, 1748, 1953);
-      else if (x <= -30720) y = pwl_lerp(x, -32768, -30720, 1953, 2178);
-      else if (x <= -28672) y = pwl_lerp(x, -30720, -28672, 2178, 2426);
-      else if (x <= -26624) y = pwl_lerp(x, -28672, -26624, 2426, 2695);
-      else if (x <= -24576) y = pwl_lerp(x, -26624, -24576, 2695, 2989);
-      else if (x <= -22528) y = pwl_lerp(x, -24576, -22528, 2989, 3307);
-      else if (x <= -20480) y = pwl_lerp(x, -22528, -20480, 3307, 3649);
-      else if (x <= -18432) y = pwl_lerp(x, -20480, -18432, 3649, 4015);
-      else if (x <= -16384) y = pwl_lerp(x, -18432, -16384, 4015, 4406);
-      else if (x <= -14336) y = pwl_lerp(x, -16384, -14336, 4406, 4820);
-      else if (x <= -12288) y = pwl_lerp(x, -14336, -12288, 4820, 5256);
-      else if (x <= -10240) y = pwl_lerp(x, -12288, -10240, 5256, 5712);
-      else if (x <= -8192) y = pwl_lerp(x, -10240, -8192, 5712, 6186);
-      else if (x <= -6144) y = pwl_lerp(x, -8192, -6144, 6186, 6674);
-      else if (x <= -4096) y = pwl_lerp(x, -6144, -4096, 6674, 7173);
-      else if (x <= -2048) y = pwl_lerp(x, -4096, -2048, 7173, 7681);
-      else if (x <= 0) y = pwl_lerp(x, -2048, 0, 7681, 8192);
-      else if (x <= 2048) y = pwl_lerp(x, 0, 2048, 8192, 8703);
-      else if (x <= 4096) y = pwl_lerp(x, 2048, 4096, 8703, 9211);
-      else if (x <= 6144) y = pwl_lerp(x, 4096, 6144, 9211, 9710);
-      else if (x <= 8192) y = pwl_lerp(x, 6144, 8192, 9710, 10198);
-      else if (x <= 10240) y = pwl_lerp(x, 8192, 10240, 10198, 10672);
-      else if (x <= 12288) y = pwl_lerp(x, 10240, 12288, 10672, 11128);
-      else if (x <= 14336) y = pwl_lerp(x, 12288, 14336, 11128, 11564);
-      else if (x <= 16384) y = pwl_lerp(x, 14336, 16384, 11564, 11978);
-      else if (x <= 18432) y = pwl_lerp(x, 16384, 18432, 11978, 12369);
-      else if (x <= 20480) y = pwl_lerp(x, 18432, 20480, 12369, 12735);
-      else if (x <= 22528) y = pwl_lerp(x, 20480, 22528, 12735, 13077);
-      else if (x <= 24576) y = pwl_lerp(x, 22528, 24576, 13077, 13395);
-      else if (x <= 26624) y = pwl_lerp(x, 24576, 26624, 13395, 13689);
-      else if (x <= 28672) y = pwl_lerp(x, 26624, 28672, 13689, 13958);
-      else if (x <= 30720) y = pwl_lerp(x, 28672, 30720, 13958, 14206);
-      else if (x <= 32768) y = pwl_lerp(x, 30720, 32768, 14206, 14431);
-      else if (x <= 34816) y = pwl_lerp(x, 32768, 34816, 14431, 14636);
-      else if (x <= 36864) y = pwl_lerp(x, 34816, 36864, 14636, 14822);
-      else if (x <= 38912) y = pwl_lerp(x, 36864, 38912, 14822, 14990);
-      else if (x <= 40960) y = pwl_lerp(x, 38912, 40960, 14990, 15141);
-      else if (x <= 43008) y = pwl_lerp(x, 40960, 43008, 15141, 15277);
-      else if (x <= 45056) y = pwl_lerp(x, 43008, 45056, 15277, 15400);
-      else if (x <= 47104) y = pwl_lerp(x, 45056, 47104, 15400, 15509);
-      else if (x <= 49152) y = pwl_lerp(x, 47104, 49152, 15509, 15607);
-      else if (x <= 51200) y = pwl_lerp(x, 49152, 51200, 15607, 15694);
-      else if (x <= 53248) y = pwl_lerp(x, 51200, 53248, 15694, 15772);
-      else if (x <= 55296) y = pwl_lerp(x, 53248, 55296, 15772, 15842);
-      else if (x <= 57344) y = pwl_lerp(x, 55296, 57344, 15842, 15904);
-      else if (x <= 59392) y = pwl_lerp(x, 57344, 59392, 15904, 15959);
-      else if (x <= 61440) y = pwl_lerp(x, 59392, 61440, 15959, 16008);
-      else if (x <= 63488) y = pwl_lerp(x, 61440, 63488, 16008, 16051);
-      else if (x <= 65536) y = pwl_lerp(x, 63488, 65536, 16051, 16089);
-      else if (x <= 69632) y = pwl_lerp(x, 65536, 69632, 16089, 16154);
-      else if (x <= 73728) y = pwl_lerp(x, 69632, 73728, 16154, 16204);
-      else if (x <= 77824) y = pwl_lerp(x, 73728, 77824, 16204, 16243);
-      else if (x <= 81920) y = pwl_lerp(x, 77824, 81920, 16243, 16274);
-      else if (x <= 86016) y = pwl_lerp(x, 81920, 86016, 16274, 16298);
-      else if (x <= 90112) y = pwl_lerp(x, 86016, 90112, 16298, 16317);
-      else if (x <= 94208) y = pwl_lerp(x, 90112, 94208, 16317, 16332);
-      else if (x <= 98304) y = pwl_lerp(x, 94208, 98304, 16332, 16343);
-      else y = 16384;
-      sigmoid_from_q14 = y[FRAC_W:0];
-    end
-  endfunction
-
-  logic signed [DATA_W-1:0] gate_argument;
-  logic [FRAC_W:0] gate_sigmoid;
-  logic signed [63:0] alpha_product, output_product;
-  always_comb begin
-    alpha_bus = '0; beta_bus = '0;
-    for (h = 0; h < 2; h = h + 1) begin
-      beta_bus[h*DATA_W +: DATA_W] = $signed({1'b0, beta_gate[h*(FRAC_W+1) +: FRAC_W+1]});
-      for (i = 0; i < DH; i = i + 1) begin
-        alpha_product = $signed({1'b0, A_bus[h*16 +: 16]}) *
-                  ($signed(f_bus[(h*DH+i)*DATA_W +: DATA_W]) + ($signed(dtb_bus[(h*DH+i)*16 +: 16]) <<< 3));
-        gate_argument = alpha_product >>> 8;
-        // Inline sigmoid permits the alpha path to remain combinational.
-        gate_sigmoid = sigmoid_from_q14(gate_argument);
-        alpha_bus[(h*DH+i)*DATA_W +: DATA_W] = decay_from_sigmoid(gate_sigmoid);
+  // Natural product width: 24-bit head_norm x 16-bit z_gate => 40-bit signed
+  // product, exact.  Was [63:0]: 64-bit LHS widened the multiply the same way.
+  logic signed [DATA_W+15:0] output_product;
+  generate
+    genvar hh, ii;
+    for (hh = 0; hh < 2; hh = hh + 1) begin : alpha_head
+      for (ii = 0; ii < DH; ii = ii + 1) begin : alpha_lane
+        logic signed [DATA_W-1:0] gate_argument;
+        logic [FRAC_W:0] gate_sigmoid;
+        // Natural product width: 17-bit A (unsigned zero-ext to signed) x
+        // 24-bit (f + dtb<<<3) => 41-bit signed product, exact, no overflow.
+        // Was [63:0]: the 64-bit LHS forced Yosys/ABC to build 64x64 signed
+        // multipliers (zero-extended A, 64-bit add), exploding techmap.
+        logic signed [DATA_W+16:0] alpha_product;
+        always_comb begin
+          alpha_product = $signed({1'b0, A_bus[hh*16 +: 16]}) *
+                    ($signed(f_bus[(hh*DH+ii)*DATA_W +: DATA_W]) + ($signed(dtb_bus[(hh*DH+ii)*16 +: 16]) <<< 3));
+          gate_argument = alpha_product >>> 8;
+        end
+        sigmoid_from_q14_mod #(.DATA_W(DATA_W), .FRAC_W(FRAC_W)) sigmoid_inst (
+          .x_in(gate_argument),
+          .y_out(gate_sigmoid)
+        );
+        decay_from_sigmoid_mod #(.DATA_W(DATA_W), .FRAC_W(FRAC_W)) decay_inst (
+          .s_in(gate_sigmoid),
+          .y_out(alpha_bus[(hh*DH+ii)*DATA_W +: DATA_W])
+        );
       end
     end
+  endgenerate
+  always_comb begin
+    beta_bus = '0;
+    for (h = 0; h < 2; h = h + 1)
+      beta_bus[h*DATA_W +: DATA_W] = $signed({1'b0, beta_gate[h*(FRAC_W+1) +: FRAC_W+1]});
   end
   always_comb begin
     core_bus = '0;
@@ -254,5 +108,276 @@ module kda_recurrence_contract #(
         core_bus[(h*DH+i)*DATA_W +: DATA_W] = output_product >>> (FRAC_W + 4);
       end
     end
+  end
+endmodule
+
+// Equivalent parameterized-module form of the former automatic function
+// sigmoid_from_q14 in kda_recurrence_contract.  Dense sigmoid PWL fit,
+// input signed Q*.14, output unsigned Q1.14.  Bit-exact to the inlined
+// function: x_in (signed DATA_W) sign-extends into the 64-bit working x,
+// and the PWL breakpoints/lerp are unchanged.
+module sigmoid_from_q14_mod #(
+  parameter int DATA_W = 24,
+  parameter int FRAC_W = 14
+) (
+  input  logic signed [DATA_W-1:0] x_in,
+  output logic        [FRAC_W:0]   y_out
+);
+  logic signed [63:0] x;
+  logic signed [63:0] y;
+  logic signed [63:0] seg_x0, seg_x1, seg_y0, seg_y1;
+  logic signed [63:0] seg_idx;
+  logic lerp_sel;
+
+  // Division-free lerp: every segment width is a power of two (2048/4096/
+  // 32768), so the runtime divide is replaced by an arithmetic shift by
+  // k=log2(x1-x0).  With dx in [0,32768] and |dy|<=511 the true product is
+  // well below 2^31, and the rounding-bias shift reproduces
+  // truncation-toward-zero signed division by a power of two bit-exactly.
+  function automatic logic signed [63:0] lerp(
+      input logic signed [63:0] x_value,
+      input logic signed [63:0] x0,
+      input logic signed [63:0] x1,
+      input logic signed [63:0] y0,
+      input logic signed [63:0] y1
+  );
+    logic signed [16:0] dx;
+    logic signed [9:0]  dy;
+    logic signed [31:0] p, w, bias, q;
+    logic [4:0] k;
+    w    = x1 - x0;                    // 2^k, k in {11,12,15}
+    k    = (w == 2048) ? 5'd11 : (w == 4096) ? 5'd12 : 5'd15;
+    dx   = (x_value - x0);             // [0,32768] when a segment is selected
+    dy   = (y1 - y0);                  // |dy| <= 511
+    p    = dx * dy;                    // |p| < 2^31, no overflow
+    bias = p[31] ? (w - 32'sd1) : 32'sd0;
+    q    = (p + bias) >>> k;
+    lerp = y0 + q;
+  endfunction
+
+  // Endpoint lookup for the sigmoid fit, 64-bit working width.  The fit uses
+  // three segment spacings: 2048-wide in the central [-65536,65536] band,
+  // 4096-wide in the [-98304,-65536] and [65536,98304] wings, and a single
+  // 32768-wide bottom [-131072,-98304] step kept as an explicit segment
+  // below.  The table below stores the fit value at each breakpoint,
+  // transcribed verbatim from the previous if-else chain's segment y0/y1
+  // constants; adjacent segments share their boundary endpoint, so a
+  // breakpoint selects the same lerp() result from either side.
+  // A single case-based endpoint table keeps this leaf structurally
+  // isomorphic to the proven-working silu_pwl lookup (one y_tab function +
+  // one-index mux), while collapsing the 80-way priority chain.  The
+  // breakpoints are a monotone sigmoid sample set: the left wing shares its
+  // -65536 end (295) with the central band's first sample, and the central
+  // band shares its +65536 end (16089) with the right wing's first sample,
+  // so all three regions index into one flat table.  Values are transcribed
+  // verbatim from the previous three-table version; adjacent segments share
+  // their boundary endpoint, so a breakpoint selects the same lerp() result
+  // from either side.
+  function automatic logic signed [63:0] y_tab(input integer i);
+    case (i)
+      0: y_tab = 41;   1: y_tab = 52;   2: y_tab = 67;   3: y_tab = 86;
+      4: y_tab = 110;  5: y_tab = 141;  6: y_tab = 180;  7: y_tab = 230;
+      8: y_tab = 295;  9: y_tab = 333;  10: y_tab = 376; 11: y_tab = 425;
+      12: y_tab = 480; 13: y_tab = 542; 14: y_tab = 612; 15: y_tab = 690;
+      16: y_tab = 777; 17: y_tab = 875; 18: y_tab = 984; 19: y_tab = 1107;
+      20: y_tab = 1243; 21: y_tab = 1394; 22: y_tab = 1562; 23: y_tab = 1748;
+      24: y_tab = 1953; 25: y_tab = 2178; 26: y_tab = 2426; 27: y_tab = 2695;
+      28: y_tab = 2989; 29: y_tab = 3307; 30: y_tab = 3649; 31: y_tab = 4015;
+      32: y_tab = 4406; 33: y_tab = 4820; 34: y_tab = 5256; 35: y_tab = 5712;
+      36: y_tab = 6186; 37: y_tab = 6674; 38: y_tab = 7173; 39: y_tab = 7681;
+      40: y_tab = 8192; 41: y_tab = 8703; 42: y_tab = 9211; 43: y_tab = 9710;
+      44: y_tab = 10198; 45: y_tab = 10672; 46: y_tab = 11128; 47: y_tab = 11564;
+      48: y_tab = 11978; 49: y_tab = 12369; 50: y_tab = 12735; 51: y_tab = 13077;
+      52: y_tab = 13395; 53: y_tab = 13689; 54: y_tab = 13958; 55: y_tab = 14206;
+      56: y_tab = 14431; 57: y_tab = 14636; 58: y_tab = 14822; 59: y_tab = 14990;
+      60: y_tab = 15141; 61: y_tab = 15277; 62: y_tab = 15400; 63: y_tab = 15509;
+      64: y_tab = 15607; 65: y_tab = 15694; 66: y_tab = 15772; 67: y_tab = 15842;
+      68: y_tab = 15904; 69: y_tab = 15959; 70: y_tab = 16008; 71: y_tab = 16051;
+      72: y_tab = 16089; 73: y_tab = 16154; 74: y_tab = 16204; 75: y_tab = 16243;
+      76: y_tab = 16274; 77: y_tab = 16298; 78: y_tab = 16317; 79: y_tab = 16332;
+      80: y_tab = 16343;
+      default: y_tab = 0;
+    endcase
+  endfunction
+
+  always_comb begin
+    x = x_in;
+    y = '0;
+    seg_x0 = '0; seg_x1 = '0; seg_y0 = '0; seg_y1 = '0;
+    seg_idx = '0;
+    lerp_sel = 1'b0;
+    if (x <= -131072) y = 5;
+    else if (x <= -98304) begin seg_x0 = -131072; seg_x1 = -98304; seg_y0 = 5; seg_y1 = 41; lerp_sel = 1'b1; end
+    else if (x <= -65536) begin
+      // Left wing (-98304, -65536]: 8 x 4096-wide segments; global table
+      // index equals the local segment index (breakpoints -98304 + i*4096).
+      seg_idx = (x + 64'sd98304) >>> 12;
+      seg_x0  = -64'sd98304 + (seg_idx <<< 12);
+      seg_x1  = seg_x0 + 64'sd4096;
+      seg_y0  = y_tab(seg_idx);
+      seg_y1  = y_tab(seg_idx + 64'sd1);
+      lerp_sel = 1'b1;
+    end
+    else if (x <= 65536) begin
+      // Central fine band (-65536, 65536]: 64 x 2048-wide segments.  The
+      // band's first breakpoint (-65536 -> 295) is table index 8 (shared
+      // with the left wing), so local segment i maps to table indices 8+i/9+i.
+      seg_idx = (x + 64'sd65535) >>> 11;
+      seg_x0  = -64'sd65536 + (seg_idx <<< 11);
+      seg_x1  = seg_x0 + 64'sd2048;
+      seg_y0  = y_tab(8 + seg_idx);
+      seg_y1  = y_tab(9 + seg_idx);
+      lerp_sel = 1'b1;
+    end
+    else if (x <= 98304) begin
+      // Right wing (65536, 98304]: 8 x 4096-wide segments.  Its first
+      // breakpoint (+65536 -> 16089) is table index 72 (shared with the
+      // central band), so local segment k maps to table indices 72+k/73+k.
+      seg_idx = (x - 64'sd65536) >>> 12;
+      seg_x0  = 64'sd65536 + (seg_idx <<< 12);
+      seg_x1  = seg_x0 + 64'sd4096;
+      seg_y0  = y_tab(72 + seg_idx);
+      seg_y1  = y_tab(73 + seg_idx);
+      lerp_sel = 1'b1;
+    end
+    else y = 16384;
+    if (lerp_sel) y = lerp(x, seg_x0, seg_x1, seg_y0, seg_y1);
+    y_out = y[FRAC_W:0];
+  end
+endmodule
+
+// Equivalent parameterized-module form of the former automatic function
+// decay_from_sigmoid in kda_recurrence_contract.  PWL for exp(-5*s), s in
+// unsigned Q1.14, output signed DATA_W.  Bit-exact to the inlined function:
+// s_in zero-extends through $signed({1'b0, s_in}), the clamp y>=110 and the
+// lerp breakpoints are unchanged.
+//
+// Round-11 synthesis-usability rewrite (same PWL, same 50 segment
+// breakpoints, same truncation-toward-zero lerp): the old 64-bit working
+// width + 50-way 64-bit priority chain + 64x64 multiply / 64-bit runtime
+// divide expanded to 501,651 gate cells and stalled ABC at "extracting gate
+// netlist" inside the 180 s window (round-10 log).  This mirrors the
+// proven-working sigmoid_from_q14_mod / silu_pwl structure: 32-bit signed
+// working width, the priority chain collapsed to a 6-level binary search over
+// a 50-entry breakpoint table plus a shared endpoint table.  |s-x0| <= 16711
+// and |y1-y0| <= 1559 keep the lerp product < 2^31, so every 32-bit
+// intermediate reproduces the old 64-bit arithmetic bit-exactly (same
+// numerator and same divisor => same truncating quotient).
+//
+// Round-32 synthesis-usability fix: the 32-bit runtime signed `p / w` (w is
+// the 327/328 segment width) was the only `$div` in this PWL and the sole
+// common failure point of the decay / kda_recurrence_contract partitions
+// (both died at ABC techmap, round-28 attempt6 log).  It is replaced by a
+// division-free, bit-exact sign-magnitude restoring long division: 32
+// shift-subtract steps over |p| yield |p|/w as an unsigned truncating
+// quotient, then the sign is restored.  This reproduces trunc(p/w) for every
+// p in [-2^31, 2^31) and w in {327,328} without emitting a `$div` cell.
+module decay_from_sigmoid_mod #(
+  parameter int DATA_W = 24,
+  parameter int FRAC_W = 14
+) (
+  input  logic        [FRAC_W:0]   s_in,
+  output logic signed [DATA_W-1:0] y_out
+);
+  logic signed [31:0] s;
+  logic signed [31:0] x0, x1, y0, y1, w, p, q, y;
+  logic signed [16:0] dx, dy;
+  logic [6:0] lo, hi, mid, seg;
+  integer di;
+  logic p_neg;
+  logic [31:0] p_mag, rem, q_mag, w_u;
+
+  // Breakpoints b(i): x1 of segment i-1 (== x0 of segment i); b(0)=0 and
+  // b(49)=16056.  Transcribed verbatim from the old chain's seg_x1 constants.
+  // Segment i (0..48) covers (b(i), b(i+1)]; s > b(49) uses the extrapolated
+  // tail [16056,16384] exactly as the old final `else` did.
+  function automatic logic signed [31:0] b_tab(input integer i);
+    case (i)
+      0: b_tab = 0;      1: b_tab = 328;   2: b_tab = 655;   3: b_tab = 983;
+      4: b_tab = 1311;   5: b_tab = 1638;  6: b_tab = 1966;  7: b_tab = 2294;
+      8: b_tab = 2621;   9: b_tab = 2949;  10: b_tab = 3277; 11: b_tab = 3604;
+      12: b_tab = 3932;  13: b_tab = 4260; 14: b_tab = 4588; 15: b_tab = 4915;
+      16: b_tab = 5243;  17: b_tab = 5571; 18: b_tab = 5898; 19: b_tab = 6226;
+      20: b_tab = 6554;  21: b_tab = 6881; 22: b_tab = 7209; 23: b_tab = 7537;
+      24: b_tab = 7864;  25: b_tab = 8192; 26: b_tab = 8520; 27: b_tab = 8847;
+      28: b_tab = 9175;  29: b_tab = 9503; 30: b_tab = 9830; 31: b_tab = 10158;
+      32: b_tab = 10486; 33: b_tab = 10813; 34: b_tab = 11141; 35: b_tab = 11469;
+      36: b_tab = 11796; 37: b_tab = 12124; 38: b_tab = 12452; 39: b_tab = 12780;
+      40: b_tab = 13107; 41: b_tab = 13435; 42: b_tab = 13763; 43: b_tab = 14090;
+      44: b_tab = 14418; 45: b_tab = 14746; 46: b_tab = 15073; 47: b_tab = 15401;
+      48: b_tab = 15729; 49: b_tab = 16056;
+      default: b_tab = 0;
+    endcase
+  endfunction
+
+  // Fit value at each breakpoint, y(b(i)).  Transcribed verbatim from the old
+  // chain's seg_y0 constants; the fit is continuous, so seg_y1(i) ==
+  // y_tab(i+1).  The tail's y1 = 110 is a literal below.
+  function automatic logic signed [31:0] y_tab(input integer i);
+    case (i)
+      0: y_tab = 16384; 1: y_tab = 14825; 2: y_tab = 13414; 3: y_tab = 12138;
+      4: y_tab = 10983; 5: y_tab = 9937;  6: y_tab = 8992;  7: y_tab = 8136;
+      8: y_tab = 7362;  9: y_tab = 6661;  10: y_tab = 6027; 11: y_tab = 5454;
+      12: y_tab = 4935; 13: y_tab = 4465; 14: y_tab = 4040; 15: y_tab = 3656;
+      16: y_tab = 3308; 17: y_tab = 2993; 18: y_tab = 2708; 19: y_tab = 2451;
+      20: y_tab = 2217; 21: y_tab = 2006; 22: y_tab = 1815; 23: y_tab = 1643;
+      24: y_tab = 1486; 25: y_tab = 1345; 26: y_tab = 1217; 27: y_tab = 1101;
+      28: y_tab = 996;  29: y_tab = 902;  30: y_tab = 816;  31: y_tab = 738;
+      32: y_tab = 668;  33: y_tab = 604;  34: y_tab = 547;  35: y_tab = 495;
+      36: y_tab = 448;  37: y_tab = 405;  38: y_tab = 367;  39: y_tab = 332;
+      40: y_tab = 300;  41: y_tab = 272;  42: y_tab = 246;  43: y_tab = 222;
+      44: y_tab = 201;  45: y_tab = 182;  46: y_tab = 165;  47: y_tab = 149;
+      48: y_tab = 135;  49: y_tab = 122;
+      default: y_tab = 0;
+    endcase
+  endfunction
+
+  always_comb begin
+    s = $signed({1'b0, s_in});
+    // Segment select: smallest i in 0..48 with s <= b(i+1); s > b(49) -> 49.
+    // Six unrolled bisection steps close the 50-entry range (2^6 >= 50), so
+    // only 6 comparison levels feed the endpoint tables instead of a 50-deep
+    // priority chain of endpoint muxes.
+    lo = 7'd0; hi = 7'd49; mid = 7'd0;
+    if (s > b_tab(49)) seg = 7'd49;
+    else begin
+      lo = 7'd0; hi = 7'd49;
+      mid = (lo + hi) >> 1; if (s <= b_tab(mid + 1)) hi = mid; else lo = mid + 1;
+      mid = (lo + hi) >> 1; if (s <= b_tab(mid + 1)) hi = mid; else lo = mid + 1;
+      mid = (lo + hi) >> 1; if (s <= b_tab(mid + 1)) hi = mid; else lo = mid + 1;
+      mid = (lo + hi) >> 1; if (s <= b_tab(mid + 1)) hi = mid; else lo = mid + 1;
+      mid = (lo + hi) >> 1; if (s <= b_tab(mid + 1)) hi = mid; else lo = mid + 1;
+      mid = (lo + hi) >> 1; if (s <= b_tab(mid + 1)) hi = mid; else lo = mid + 1;
+      seg = lo;
+    end
+    x0 = b_tab(seg);
+    x1 = (seg == 7'd49) ? 32'sd16384 : b_tab(seg + 1);
+    y0 = y_tab(seg);
+    y1 = (seg == 7'd49) ? 32'sd110 : y_tab(seg + 1);
+    // Narrow lerp: dx in [0,16711], |dy| <= 1559, so |p| < 2^31 and the 32-bit
+    // multiply plus a truncating divide by the same 327/328 width w reproduce
+    // the old 64-bit lerp bit-exactly.  The divide is emitted as a restoring
+    // long division (no `$div` cell): |p|/w by 32 shift-subtract steps with
+    // the sign restored on the quotient, == trunc(p/w) bit-for-bit.
+    dx = s - x0;
+    dy = y1 - y0;
+    p  = dx * dy;
+    w  = x1 - x0;
+    p_neg = p[31];
+    p_mag = p_neg ? (~p + 32'd1) : p;
+    w_u   = w;
+    rem   = 32'd0;
+    q_mag = 32'd0;
+    for (di = 31; di >= 0; di = di - 1) begin
+      rem = {rem[30:0], p_mag[di]};
+      if (rem >= w_u) begin
+        rem       = rem - w_u;
+        q_mag[di] = 1'b1;
+      end
+    end
+    q = $signed(p_neg ? (~q_mag + 32'd1) : q_mag);
+    y  = y0 + q;
+    if (y < 32'sd110) y = 32'sd110;
+    y_out = y;
   end
 endmodule
