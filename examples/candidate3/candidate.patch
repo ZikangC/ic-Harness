@@ -1,0 +1,44 @@
+--- a/rtl/nano_core.sv
++++ b/rtl/nano_core.sv
+@@ -584,12 +584,16 @@
+                                             input logic [1023:0] src,
+                                             input logic [6:0]    off,
+                                             input logic [6:0]    wid);
+-    logic [1023:0] r;
+-    for (int i = 0; i < 64; i++) begin
+-      if (i >= off && i < (off + wid)) r[i*16 +: 16] = src[i*16 +: 16];
+-      else                             r[i*16 +: 16] = base[i*16 +: 16];
+-    end
+-    mergev = r;
++    logic [63:0] lm;
++    logic [1023:0] m;
++    // lane-window merge as a mask: lane i takes src iff off <= i < off+wid.
++    // The 64-bit lane mask saturates exactly like the loop bound: wid>=64
++    // selects every lane from off, off>=64 selects none, and off+wid>64 clips
++    // at lane 63. Each lane select is replicated over the lane's 16 bits, so
++    // the plane is (base & ~m) | (src & m) with one uniform select per lane.
++    lm = ((64'd1 << wid) - 64'd1) << off;
++    for (int i = 0; i < 64; i++) m[i*16 +: 16] = {16{lm[i]}};
++    mergev = (base & ~m) | (src & m);
+   endfunction
+ 
+   // 2x with signed 16-bit saturation: the KDA conv/SiLU outputs are stored
+@@ -680,12 +684,12 @@
+                                             input logic [511:0] src,
+                                             input logic [6:0]    off,
+                                             input logic [6:0]    wid);
+-    logic [511:0] r;
+-    for (int i = 0; i < 64; i++) begin
+-      if (i >= off && i < (off + wid)) r[i*8 +: 8] = src[i*8 +: 8];
+-      else                             r[i*8 +: 8] = base[i*8 +: 8];
+-    end
+-    mergev8 = r;
++    logic [63:0] lm;
++    logic [511:0] m;
++    // 8-bit-lane form of the same lane-mask merge (identical window semantics)
++    lm = ((64'd1 << wid) - 64'd1) << off;
++    for (int i = 0; i < 64; i++) m[i*8 +: 8] = {8{lm[i]}};
++    mergev8 = (base & ~m) | (src & m);
+   endfunction
+ 
+   function automatic logic [511:0] shl8 (input logic [511:0] y, input logic [6:0] l);

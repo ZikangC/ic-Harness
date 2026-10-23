@@ -1,0 +1,51 @@
+{
+  "scope": "Private scoring notes for focused source/proposal value-correspondence review; do not supply to a model under evaluation. Not an end-to-end architecture acceptance score.",
+  "cases": [
+    {
+      "id": "9d84c0a2",
+      "expected_judgment": "no_semantic_revision",
+      "required_reasoning": "Source and proposal both form U=clip(S_previous+X), emit 2*U, and commit clip(U+bias). The output consumes the intermediate version. Output retention and sequential sample order are stated.",
+      "false_rejection_examples": [
+        "Demanding a full cycle schedule or physical timing proof outside this packet.",
+        "Rejecting a legal sequential implementation because it differs from reference line execution details."
+      ]
+    },
+    {
+      "id": "f103ab6e",
+      "expected_judgment": "semantic_revision",
+      "critical_difference": "The proposal emits 2*S_committed rather than 2*U. Its entry state and final state can match the reference while outputs differ.",
+      "counterexample": {
+        "samples": [
+          1,
+          0,
+          0
+        ],
+        "bias": 1,
+        "reference_outputs": [
+          2,
+          4,
+          6
+        ],
+        "proposal_outputs": [
+          4,
+          6,
+          8
+        ],
+        "final_state_in_both": 4,
+        "first_edge": "S_previous=0 -> U=1 -> S_committed=2; output must consume U, not S_committed."
+      },
+      "closure": "Preserve the source output value for every legal input, by consuming or equivalently reconstructing the correct intermediate. Do not mandate an additional physical register or a particular organization."
+    },
+    {
+      "id": "37a980d1",
+      "expected_judgment": "no_semantic_revision",
+      "required_reasoning": "Both output and committed state consume U=clip(S_previous+X). Fusing into one combinational path and computing its two consumers in parallel preserves exact values; a physical U register is unnecessary.",
+      "false_rejection_examples": [
+        "Requiring source line ordering between independent consumers of U.",
+        "Demanding materialization of every Python intermediate.",
+        "Calling use of old S in the combinational U path an overwrite bug despite simultaneous commit semantics."
+      ]
+    }
+  ],
+  "scoring": "For each case assess the decisive value-version argument, not keyword matching. Correct cases must not receive an invented semantic finding. The wrong-version case needs the differing consumed version and a valid counterexample or equivalent derivation. New independently supported packet defects can be reported separately."
+}

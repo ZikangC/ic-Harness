@@ -1,0 +1,9 @@
+read_rtlil checkpoints/elaborated.il
+synth -top msh_chip_top -noabc -noshare -run coarse:coarse
+check -assert
+scc -expect 0
+select -assert-none t:$dlatch t:$adlatch t:$dlatchsr
+tee -o reports/coarse.stat.txt stat -width
+tee -o reports/coarse.stat.json stat -json
+write_json reports/coarse.design.json
+write_rtlil checkpoints/coarse.il

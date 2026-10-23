@@ -1,0 +1,141 @@
+{
+  "run_id": "synth--20261023-v19-candidate3-sv51",
+  "job_id": "synth--20261023-v19-candidate3-sv51--synthesis-01",
+  "baseline_run": "/work/harness_final/output/readiness-integration--20261022/v19/project/output/candidate3-delivery",
+  "candidate_sha256": "a5e26e78f7fa67465a92b238ff15324fb14d65891b20bea6e61dd860f575406f",
+  "review_report_sha256": "8152929cf0f61935e32751544f6b846de0fb904d1a4723267a752dc6f0b27355",
+  "liberty": "/opt/OpenROAD-flow-scripts/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib",
+  "liberty_sha256": "8d540a4d4cf6d09d27c87ad067857a9c0c2eeb023ab7a56e058cd3113db4e9b1",
+  "compiled_sources": [
+    "rtl/nano_leaf.sv",
+    "rtl/nano_mem.sv",
+    "rtl/nano_core.sv",
+    "rtl/msh_chip_top.sv"
+  ],
+  "rtl_closure": [
+    "rtl/nano_leaf.sv",
+    "rtl/nano_mem.sv",
+    "rtl/nano_core.sv",
+    "rtl/msh_chip_top.sv",
+    "rtl/nano_lut.svh",
+    "rtl/nano_desc.svh",
+    "rtl/nano_prog.svh",
+    "rtl/nano_token.svh",
+    "rtl/nano_exec.svh",
+    "rtl/nano_ctrl.svh"
+  ],
+  "candidate_scope": "rtl/candidates/candidate-1/work",
+  "source_work": "input",
+  "review_path": "rtl/reviews/review-1.json",
+  "review_report_path": "provenance/v19-audit-report.json",
+  "review_scope": "Scoped delivery audit + independent engineering accept + full binary function proof; not whole-system RTL/PPA release",
+  "origin_candidate_sha256": "7dbe6321e1a1163fc98ece57f4c9f37711f54245d941eb4ab390ede7d734a5f3",
+  "origin_architecture_baseline_sha256": "59bdc873d3c3c5fe31c1d89a7a49c2377d904521b5cf307753a6673837518b7f",
+  "expected_rtl": {
+    "rtl/nano_leaf.sv": {
+      "type": "file",
+      "sha256": "e60a5c6334512c1e5bddcd28a546c42f8c9d3bc513a8d5c2c988150cded97df8",
+      "mode": 420
+    },
+    "rtl/nano_mem.sv": {
+      "type": "file",
+      "sha256": "ba2afad12baf7bb400cd7447fa9e3b9c6ad4a0dd7d0655a74470e3fb1594e9b6",
+      "mode": 420
+    },
+    "rtl/nano_core.sv": {
+      "type": "file",
+      "sha256": "db019c536f5d60c9b9399ead1110c6aff235e1262d76098dd974c9e5170d8423",
+      "mode": 420
+    },
+    "rtl/msh_chip_top.sv": {
+      "type": "file",
+      "sha256": "da7adc9c7469e9ee39d206f1fec9b206ebb070ad9359f6ce4329558b72dc1e7d",
+      "mode": 420
+    },
+    "rtl/nano_lut.svh": {
+      "type": "file",
+      "sha256": "4c682b0c34ff0089337af1face9daf34d13a9d974a85cae06b00ec48b8e3f301",
+      "mode": 420
+    },
+    "rtl/nano_desc.svh": {
+      "type": "file",
+      "sha256": "22562a4d7c09518745444f36ee7e019d35b7a2080047b8249c226b556fbbdd24",
+      "mode": 420
+    },
+    "rtl/nano_prog.svh": {
+      "type": "file",
+      "sha256": "baa7180ece0249abf6ad0535cec6c552756f33c21181de2682f9b99a16c68621",
+      "mode": 420
+    },
+    "rtl/nano_token.svh": {
+      "type": "file",
+      "sha256": "3aa80217160eeca2cb2f0e5a2b2628c1e26d389fcd66ac0d9fb9b132410b0ac2",
+      "mode": 420
+    },
+    "rtl/nano_exec.svh": {
+      "type": "file",
+      "sha256": "fb23a5b79fd9e0899d35cf43ba7d5c7615993dde413a495f8be2daa96855f5f1",
+      "mode": 420
+    },
+    "rtl/nano_ctrl.svh": {
+      "type": "file",
+      "sha256": "86b5c3de0c877be45f75290100d5658d34e35f4a4968db24c3525f9b4986dbf4",
+      "mode": 420
+    }
+  },
+  "tool_pins": {
+    "/opt/eda/bin/yosys": {
+      "realpath": "/opt/eda/bin/yosys",
+      "sha256": "43f5a1a2448bcc29fb09bd199f9f49dae6a33beaa1ecdc180d8a6eceb67af24f"
+    },
+    "/opt/eda/bin/yosys-abc": {
+      "realpath": "/opt/eda/bin/yosys-abc",
+      "sha256": "58d7a64733636b73f850558cdd399a14d27492d94c0c162874ba29450e31434e"
+    }
+  },
+  "protected_old_files": {},
+  "known_active_eda": [],
+  "address_space_gib": 128,
+  "min_available_gib": 160,
+  "min_disk_free_gib": 256,
+  "constraints": {
+    "clock_target_hz": 100000000,
+    "source": "frozen spec section 7",
+    "clock_uncertainty": null,
+    "io_delay_load": null,
+    "macro_timing_models": null,
+    "sta_enabled": false
+  },
+  "created_utc": "2026-10-23T03:02:13.341275+00:00",
+  "stage_reuse": "Four existing cached Yosys scripts verified byte-identical to prior launch; all checkpoints regenerated on this host",
+  "source_only_delta": [
+    "rtl/nano_core.sv"
+  ],
+  "top": "msh_chip_top",
+  "parameters": {},
+  "migration": {
+    "source_cache": "/private/tmp/nano-rtl-v19-review.ATALHL",
+    "source_verified_against": "provenance/previous-request.json",
+    "source_server": "txjg7-2@192.168.0.13",
+    "destination_server": "czk@100.85.224.17",
+    "destination_hostname": "sv51",
+    "container": "eda",
+    "container_run": "/work/harness_final/output/synth--20261023-v19-candidate3-sv51",
+    "host_run": "/home/czk/workspace/harness_final/output/synth--20261023-v19-candidate3-sv51",
+    "old_job_current_state": "unavailable; SSH to old host timed out; no old jobs changed",
+    "full_native_candidate_inventory_transferred": false,
+    "identity_scope": "All 10 synthesis input bytes and review report match the previous source-bound request. Native full work+architecture candidate digest is a provenance pin, not recomputed from this smaller closure."
+  },
+  "rtl_closure_sha256": "6cd8e7137853241efee622acabfb664f41f3b4cf2bd47480de484c565ddbf296",
+  "phase_script_sha256": {
+    "01_elaborate.ys": "d5d78878f0466b5c4ac60c20f6f9d0486884dd25daf0c6c0fe23f25006da27cb",
+    "02_coarse.ys": "c133ee728d71a356235bdd8d135fe1e01c30152b522f9e0e44e573c22d1a8e02",
+    "03_generic.ys": "dac4aa680f07cf2be9a78239f2579adbbb480d350eb44bf208a3f9c795379073",
+    "04_map.ys": "0a392e98bfe2d7bf190ff35d873428bdffcf5384275c6fa344126d647931c384"
+  },
+  "macro_expectation": {
+    "instances": 9,
+    "total_bits": 1720320,
+    "model": "blackbox sram_1r1w; no physical area or timing models"
+  }
+}

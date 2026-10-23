@@ -1,0 +1,22 @@
+schema_version = 1
+
+[runtime]
+executable = "omp"
+command_template = ["omp", "-p", "--cwd", "{project_root}", "--model", "{model}", "{prompt}"]
+request_timeout_seconds = 60
+# Authentication remains in the user's existing OMP profile. No keys are copied.
+provider_config = "~/.omp/agent/models.yml"
+
+[provider]
+name = "tencent-tokenhub"
+base_url = "https://api.lkeap.cloud.tencent.com/plan/anthropic"
+api = "anthropic-messages"
+
+[roles]
+architecture = "deepseek-v4-pro-202606"
+implementation = "deepseek-v4-flash-202605"
+review = "deepseek-v4-pro-202606"
+evidence = "deepseek-v4-flash-202605"
+
+# This file selects roles for the future harness. OMP provider resolution still
+# uses provider_config; changing provider metadata alone does not reconfigure OMP.

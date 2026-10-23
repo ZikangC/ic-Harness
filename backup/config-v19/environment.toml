@@ -1,0 +1,27 @@
+schema_version = 1
+
+[project]
+# Resolved relative to this configuration file; portable across project copies.
+root = "../.."
+input_dir = "input"
+output_dir = "output"
+
+[remote]
+ssh_host = "txjg7-2@192.168.0.13"
+host_workspace_root = "/home/txjg7-2/ic-project"
+container = "k3demo-eda"
+container_workspace_root = "/work"
+# Empty: use the local project directory name. No dependency on the old project.
+project_name = "harness_final/output/readiness-integration--20261022/v19/project"
+connect_timeout_seconds = 8
+command_timeout_seconds = 45
+
+[eda]
+python = "/opt/eda/bin/python3"
+verilator = "/opt/eda/bin/verilator"
+yosys = "/opt/eda/bin/yosys"
+openroad = "/opt/OpenROAD/build/bin/openroad"
+sta_backend = "openroad_opensta"
+liberty = "/opt/OpenROAD-flow-scripts/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib"
+
+# Chip budgets and target clock belong in input/spec, not environment defaults.

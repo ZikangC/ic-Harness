@@ -1,0 +1,26 @@
+{
+  "verdict": "pass",
+  "candidate_sha256": "a5e26e78f7fa67465a92b238ff15324fb14d65891b20bea6e61dd860f575406f",
+  "decision": "candidate_for_integration",
+  "reason": "Delivery objective satisfied: the frozen candidate was correctly cloned and finalized as an ordinary source-bound candidate_for_integration, and an independent read-only re-verification of the published bundle passed. Clone job 1792668595954190882 (exit 0) cloned the v18 workspace and pinned direct receipt references for base-1/base-2/base-3 and cand-1/cand-2/cand-3 (flattened to their v17 origins) plus func-1 (v18 origin) under variant maskmerge, preserving workspace_id 0c068afe..., baseline_identity f6f16533... and variant_identity dc3b27ef... Finalize job 1792668602300651425 (exit 0) used the correct absolute --out inside the workspace and atomically published comparison.json/candidate.json/candidate.patch/delivery.json/finalization.json (finalization_identity bd0cb097..., comparison_identity 3ad38bd7...). My current audit verification job 1792669472824452548 (exit 0, bound to candidate a5e26e78...) re-validated the complete bundle, re-read the pinned receipts at their actual v17/v18 origins, and re-confirmed decision=candidate_for_integration with consistent identities across finalization/comparison/candidate/variant/workspace. Functional evidence is real and scoped: v18 func-1 (result sha b6ed8bf0...) is a complete 2-state combinational SAT equivalence proof of the changed mergev/mergev8 function bodies over all 128x128 (off,wid) and all base/src binary inputs (661 cells, 1 $assert, 0 $dff, 'SAT proof finished - no model found: SUCCESS'), with the file byte-identical outside those two bodies (baseline nano_core.sv 3763cc95..., candidate db019c53...). Cost evidence: v17 3+3 local probe_wb synthesis measurements, baseline 12.684905/12.685429/12.785433 s vs candidate 6.603858/6.703129/6.701814 s, median ratio 1.8928, ranges separated. Changed source is only rtl/nano_core.sv (loop-if mergev/mergev8 rewritten to lane-mask form). Hard-gate/scope status is preserved and NOT claimed as passed: 4-state X/Z propagation of changed off/wid control is unmodeled (downstream contract review); the measured top is the derived probe_wb, not full nano_core elaboration; no whole-chip elapsed, mapped area, macro area, fanout or STA is established; and the architecture-packet numerical gates (per-row cosine / pooled 48+16 agreement) plus the 100 MHz physical closure remain downstream implementation obligations under the accepted_estimate_only architecture. Historical records are unchanged: v16 revise and v17/v18 evidence_incomplete are not retroactively relabeled. This is a scoped candidate_for_integration, not full-chip acceptance; integration must apply only the authorized rtl/nano_core.sv change and still requires the project's formal RTL review and full-design assessment.",
+  "evidence": ["1792669472824452548"],
+  "supporting_jobs": {
+    "clone": "1792668595954190882",
+    "finalize": "1792668602300651425"
+  },
+  "delivery": {
+    "workspace": "/work/harness_final/output/readiness-integration--20261022/v19/project/output/candidate3-delivery/readiness/campaign-1/work/ws",
+    "finalization_identity": "bd0cb097c5f82d5dec266a05e3bb512c549826a61c44efc04661dcf119609047",
+    "comparison_identity": "3ad38bd7ccc70d37c27cc79d54d03686b835270373fd905bf06bd68cafbd2e6d",
+    "variant_identity": "dc3b27ef12b7ac600e460651db02006ffcccb35a875a6661c3ca2d549539a2fe",
+    "baseline_identity": "f6f165337948ac6984da82dc98fd4d46d5c474aa35c050e87b5cae04dc1fba48"
+  },
+  "scope_limits": [
+    "2-state semantics only: X/Z propagation of changed off/wid control is not modeled or claimed; loop-if and mask forms may differ on unknown off/wid.",
+    "Measurement scope is the derived local probe_wb (VRF writeback process shape), not full nano_core elaboration/synthesis; no whole-chip elapsed, mapped area, macro area, fanout or STA.",
+    "The request top field is nano_core but the actually measured top is the derived probe_wb; consumers must treat the measured top as the probe.",
+    "Candidate patch is not applied to any source; integration requires the project's formal RTL review, full-design regression, mapped-area/timing assessment and any X/Z contract review.",
+    "The architecture-packet numerical gates (per-row cosine >= 0.98, pooled 48+16 agreement >= 0.99) and 100 MHz physical closure are downstream implementation obligations, unverified here.",
+    "A local proc/lowering speedup does not imply full-design timing or area improvement."
+  ]
+}

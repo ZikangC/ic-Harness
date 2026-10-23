@@ -1,0 +1,4 @@
+interface:
+  display_name: "RTL Transaction Ledger"
+  short_description: "Maintain one evidence-backed RTL/EDA mainline transaction"
+  default_prompt: "Maintain or validate the current RTL/EDA transaction ledger without choosing project-specific actions."

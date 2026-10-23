@@ -1,0 +1,8 @@
+read_rtlil checkpoints/coarse.il
+synth -top msh_chip_top -noabc -noshare -run fine:
+check -assert
+scc -expect 0
+select -assert-none t:$dlatch t:$adlatch t:$dlatchsr t:$_DLATCH_*
+tee -o reports/generic.stat.txt stat -width
+tee -o reports/generic.stat.json stat -json
+write_rtlil checkpoints/generic.il

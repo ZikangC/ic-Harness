@@ -1,0 +1,3275 @@
+{
+  "scope": "Two hand-authored independent small-input architecture-audit behavior fixtures, not generated current-project artifacts or evidence of cross-project generation/RTL/physical closure.",
+  "packet_boundary": "Model packets MUST be built only from case.input, case.proposal and actual executed program reports. Never provide private_expectations, case ID, file name, this scope, scoring notes or expected verdicts to either baseline or proposal model.",
+  "limitations": [
+    "The fixtures are synthetic and deliberately bounded; they do not reproduce the current chip specification or its architecture.",
+    "The source-count case establishes a narrow direct-loop defect, not a universal lower bound for all algebraically transformed implementations.",
+    "The passing case permits implementation evidence obligations and an openly unmet soft objective; it does not prove real macro timing, full protocol liveness or silicon closure.",
+    "False-rejection categories guide human scoring; they cannot suppress a newly discovered concrete violated requirement."
+  ],
+  "cases": [
+    {
+      "id": "e4b8962c",
+      "input": {
+        "spec.md": "# Small linear task\n\nOne task has 4 input rows with 3 elements per row and 3 runtime weights. All input elements and weights are signed 8-bit integers in [-128,127]. Return 4 exact signed 32-bit dot products. No approximation or weight specialization is allowed.\nInput values and weights can change on every task. Consecutive tasks require no external reset. Power-on reset initializes control; the implementer chooses the task ABI. The active-low reset_n input may abort a task; completion is not required after an asserted reset.\nThe physical ports are cmd[63:0] with valid/ready, rsp[7:0] with valid/ready, and a byte-addressed memory port with 16 address bits and 8 data bits. Memory requests have valid/ready, read/write, address, write data and one write-strobe bit. Read responses are ordered valid/ready byte values; writes complete when their requests are accepted. Preserve pending values under backpressure and issue DONE only after all output writes are accepted.\nFor the performance estimate, memory accepts 1 request per cycle and returns each read after exactly 1 cycle; command/response/output acceptance has no stalls. Arbitrary finite backpressure must preserve functional behavior, although it extends latency.\nThe abstract SRAM capability is 1 read port and 1 write port per instance, synchronous read latency 1 cycle, minimum depth 8 and width multiple 8. There is no required bank count or cache organization. Register storage is permitted. Internal reads issued during cycle c become available at the beginning of cycle c+1; the arithmetic operation can run in that cycle and commit at its end.\nHard estimated area limit is 0.5 mm2. Hard total macro capacity limit is 512 bits. The design clock objective is 2 MHz. The throughput objective is 250000 item/s, where one item is one output row. Throughput is a soft objective: a design missing it can be delivered if the shortfall is stated and hard requirements are met.\nFor this synthetic architecture exercise, use abstract macro density 4096 bit/mm2. Component cost estimates excluding macros are 0.07 mm2 per signed 8x8 multiply/32-bit accumulate lane, 0.09 mm2 for the single-lane controller or 0.10 mm2 for the two-lane controller, and 0.04 mm2 for the single-lane register inventory or 0.045 mm2 for the two-lane register inventory. These are prescribed estimates for comparison, not measurements or synthesis. The register inventory includes command, counters, pending read address/data, accumulators and all four output words.\nPhysical library timing, clock uncertainty, I/O loads and RTL execution are outside this exercise and remain implementation evidence. The architecture must decide its complete ABI, numerical scheme, finite flow control, storage and schedule before delivery.\n",
+        "reference.py": "def dot_task(values, weights):\n    assert len(values) == 4\n    assert len(weights) == 3\n    result = []\n    for row in values:\n        assert len(row) == 3\n        total = 0\n        for column in range(3):\n            total += int(row[column]) * int(weights[column])\n        result.append(total)\n    return result\n"
+      },
+      "proposal": {
+        "requirements": {
+          "facts": [
+            {
+              "id": "f_rows",
+              "value": 4,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "One task has 4 input rows with 3 elements per row and 3 runtime weights.",
+                  "start": 3,
+                  "end": 3
+                }
+              ]
+            },
+            {
+              "id": "f_columns",
+              "value": 3,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "One task has 4 input rows with 3 elements per row and 3 runtime weights.",
+                  "start": 3,
+                  "end": 3
+                }
+              ]
+            },
+            {
+              "id": "f_clock",
+              "value": 2,
+              "unit": "MHz",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "The design clock objective is 2 MHz.",
+                  "start": 8,
+                  "end": 8
+                }
+              ]
+            },
+            {
+              "id": "f_objective",
+              "value": 250000,
+              "unit": "item/s",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "The throughput objective is 250000 item/s, where one item is one output row.",
+                  "start": 8,
+                  "end": 8
+                }
+              ]
+            },
+            {
+              "id": "f_area",
+              "value": 0.5,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "Hard estimated area limit is 0.5 mm2.",
+                  "start": 8,
+                  "end": 8
+                }
+              ]
+            },
+            {
+              "id": "f_capacity",
+              "value": 512,
+              "unit": "bits",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "Hard total macro capacity limit is 512 bits.",
+                  "start": 8,
+                  "end": 8
+                }
+              ]
+            },
+            {
+              "id": "f_density",
+              "value": 4096,
+              "unit": "bit/mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "use abstract macro density 4096 bit/mm2.",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "f_depth",
+              "value": 8,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "minimum depth 8 and width multiple 8.",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "f_width",
+              "value": 8,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "minimum depth 8 and width multiple 8.",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "f_rports",
+              "value": 1,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "1 read port and 1 write port per instance",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "f_wports",
+              "value": 1,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "1 read port and 1 write port per instance",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "f_latency",
+              "value": 1,
+              "unit": "cycles",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "synchronous read latency 1 cycle",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "f_lane_area",
+              "value": 0.07,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "0.07 mm2 per signed 8x8 multiply/32-bit accumulate lane",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "f_ctrl_a",
+              "value": 0.09,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "0.09 mm2 for the single-lane controller",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "f_ctrl_b",
+              "value": 0.1,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "0.10 mm2 for the two-lane controller",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "f_regs_a",
+              "value": 0.04,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "0.04 mm2 for the single-lane register inventory",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "f_regs_b",
+              "value": 0.045,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "0.045 mm2 for the two-lane register inventory",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "constraints": [
+            {
+              "id": "q_68d",
+              "limit": "f_area",
+              "kind": "hard",
+              "relation": "<=",
+              "unit": "mm2",
+              "verification": "estimate",
+              "quantity": "area"
+            },
+            {
+              "id": "q_73b",
+              "limit": "f_capacity",
+              "kind": "hard",
+              "relation": "<=",
+              "unit": "bits",
+              "verification": "estimate",
+              "quantity": "capacity"
+            },
+            {
+              "id": "q_c52",
+              "limit": "f_objective",
+              "kind": "target",
+              "relation": ">=",
+              "unit": "item/s",
+              "verification": "estimate",
+              "quantity": "items_per_second",
+              "workload": "w_a24"
+            },
+            {
+              "id": "q_418",
+              "limit": "f_clock",
+              "kind": "target",
+              "relation": ">=",
+              "unit": "MHz",
+              "verification": "implementation",
+              "quantity": "clock"
+            }
+          ],
+          "runtime_parameters": [],
+          "open_conditions": [
+            "Physical library timing, clock uncertainty, I/O loads and RTL execution remain implementation evidence."
+          ],
+          "functional_obligations": [
+            "Every output is the exact three-term signed dot product; all operands are runtime data.",
+            "Backpressure preserves pending requests/responses; DONE follows accepted output writes; no reset between tasks."
+          ],
+          "storage_area_model": {
+            "status": "supplied",
+            "density_fact": "f_density"
+          },
+          "storage_rules": [
+            {
+              "kind": "SRAM",
+              "min_depth": "f_depth",
+              "width_multiple": "f_width",
+              "read_ports": "f_rports",
+              "write_ports": "f_wports",
+              "read_latency_cycles": "f_latency"
+            }
+          ]
+        },
+        "work_model": {
+          "workloads": [
+            {
+              "id": "w_a24",
+              "quantity": "f_rows",
+              "unit": "rows",
+              "basis": "one fixed task has four output rows"
+            }
+          ],
+          "items": [
+            {
+              "id": "u_c72",
+              "category": "control",
+              "semantics": "Accept and copy the command and initialize per-task counters",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [],
+              "count": {
+                "kind": "none",
+                "reason": "nonarithmetic command/control"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "task",
+                  "axis": "task"
+                }
+              },
+              "references": [
+                {
+                  "file": "spec.md",
+                  "quote": "the implementer chooses the task ABI.",
+                  "start": 4,
+                  "end": 4
+                }
+              ]
+            },
+            {
+              "id": "u_b9a",
+              "category": "movement",
+              "semantics": "Load all twelve input bytes and three runtime coefficient bytes",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [
+                "u_c72"
+              ],
+              "count": {
+                "kind": "none",
+                "reason": "traffic, not arithmetic"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "task",
+                  "axis": "task"
+                }
+              },
+              "references": [
+                {
+                  "file": "spec.md",
+                  "quote": "One task has 4 input rows with 3 elements per row and 3 runtime weights.",
+                  "start": 3,
+                  "end": 3
+                }
+              ]
+            },
+            {
+              "id": "u_65e",
+              "category": "state",
+              "semantics": "Set each row accumulator to zero before its first product",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [
+                "u_b9a"
+              ],
+              "count": {
+                "kind": "none",
+                "reason": "zero select within row start, no arithmetic count"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "element",
+                  "axis": "row",
+                  "multiplicity": 1
+                }
+              },
+              "references": [
+                {
+                  "file": "reference.py",
+                  "quote": "total = 0",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "u_4d1",
+              "category": "compute",
+              "semantics": "Direct signed dot product for every output row, with one MAC per source term",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [
+                "u_65e"
+              ],
+              "count": {
+                "kind": "matmul",
+                "m": 1,
+                "n": 1,
+                "k": 1,
+                "batch": 1,
+                "unit": "MAC"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "element",
+                  "axis": "row",
+                  "multiplicity": 1
+                }
+              },
+              "references": [
+                {
+                  "file": "reference.py",
+                  "quote": "for column in range(3):\n            total += int(row[column]) * int(weights[column])",
+                  "start": 8,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "u_a37",
+              "category": "movement",
+              "semantics": "Write four little-endian signed32 output words as sixteen accepted bytes",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [
+                "u_4d1"
+              ],
+              "count": {
+                "kind": "none",
+                "reason": "output traffic, not arithmetic"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "task",
+                  "axis": "task"
+                }
+              },
+              "references": [
+                {
+                  "file": "spec.md",
+                  "quote": "Return 4 exact signed 32-bit dot products.",
+                  "start": 3,
+                  "end": 3
+                }
+              ]
+            },
+            {
+              "id": "u_82f",
+              "category": "control",
+              "semantics": "Publish DONE only after the final output write acceptance",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [
+                "u_a37"
+              ],
+              "count": {
+                "kind": "none",
+                "reason": "completion event"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "task",
+                  "axis": "task"
+                }
+              },
+              "references": [
+                {
+                  "file": "spec.md",
+                  "quote": "issue DONE only after all output writes are accepted.",
+                  "start": 5,
+                  "end": 5
+                }
+              ]
+            }
+          ]
+        },
+        "candidates": [
+          {
+            "id": "c_275",
+            "organization": "one serial signed MAC reused across rows",
+            "assumptions": [
+              {
+                "id": "a_lanes",
+                "value": 1,
+                "unit": "count",
+                "basis": "chosen physical MAC count"
+              }
+            ],
+            "calculations": [],
+            "macros": [
+              {
+                "name": "m_6d4",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "ports_and_schedule": "row-major address row*3+column; 1R1W, latency one"
+              },
+              {
+                "name": "m_c91",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "ports_and_schedule": "one coefficient read per column step, broadcast to both lanes if present; 1R1W latency one"
+              }
+            ],
+            "metrics": {
+              "q_418": {
+                "status": "unverified",
+                "reason": "physical timing and library characterization remain implementation evidence"
+              }
+            },
+            "workloads": [
+              {
+                "id": "w_a24",
+                "clock_fact": "f_clock",
+                "components": [
+                  {
+                    "id": "i_start",
+                    "composition": "serial",
+                    "references": [
+                      "g_f64"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_load",
+                    "composition": "serial",
+                    "references": [
+                      "g_194"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_dot",
+                    "composition": "serial",
+                    "references": [
+                      "g_295"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_store",
+                    "composition": "serial",
+                    "references": [
+                      "g_b71"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_done",
+                    "composition": "serial",
+                    "references": [
+                      "g_782"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  }
+                ]
+              }
+            ],
+            "resource_checks": [
+              {
+                "id": "r_8af",
+                "demand_per_cycle": 1,
+                "supply_per_cycle": 1,
+                "unit": "MAC/cycle",
+                "basis": "one MAC per actual lane per cycle"
+              },
+              {
+                "id": "r_436",
+                "demand_per_cycle": 1,
+                "supply_per_cycle": 1,
+                "unit": "byte/cycle",
+                "basis": "one external byte request/response per cycle under stated performance conditions"
+              }
+            ],
+            "abi_fields": [
+              {
+                "name": "opcode",
+                "width": 8,
+                "offset": 56,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "input_base",
+                "width": 16,
+                "offset": 40,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "weight_base",
+                "width": 16,
+                "offset": 24,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "output_base",
+                "width": 16,
+                "offset": 8,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "reserved_zero",
+                "width": 8,
+                "offset": 0,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              }
+            ],
+            "cost_groups": [
+              {
+                "id": "g_f64",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_c72"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 1,
+                "basis": "one dispatch cycle"
+              },
+              {
+                "id": "g_194",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_b9a"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 16,
+                "basis": "15 pipelined byte reads plus one synchronous response drain cycle; one pending credit reused on response acceptance"
+              },
+              {
+                "id": "g_b71",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_a37"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 16,
+                "basis": "16 consecutive byte writes, each counted at acceptance"
+              },
+              {
+                "id": "g_782",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_82f"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 1,
+                "basis": "one ready DONE response cycle after all writes"
+              },
+              {
+                "id": "g_295",
+                "model": "compute",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_65e",
+                  "u_4d1"
+                ],
+                "resources": [
+                  "r_e94",
+                  "m_6d4",
+                  "m_c91"
+                ],
+                "units": 1,
+                "operations_per_unit_cycle": 1,
+                "overhead_cycles": 1,
+                "basis": "direct source MACs at one MAC per lane per cycle; one synchronous input-read pipeline fill; row-zero select is included"
+              }
+            ],
+            "traffic": [
+              {
+                "id": "t_847",
+                "model": "continuous_reserved",
+                "payload_bytes": 15,
+                "transfers": 1,
+                "alignment_bytes": 1,
+                "transaction_bytes": 1,
+                "latency_cycles": 1,
+                "transactions_per_cycle": 1,
+                "inflight": 1,
+                "response_buffer_bytes": 1,
+                "basis": "12 input and 3 weight bytes, one response slot per pending read"
+              },
+              {
+                "id": "t_a85",
+                "model": "posted_write",
+                "payload_bytes": 16,
+                "transfers": 1,
+                "alignment_bytes": 1,
+                "transaction_bytes": 1,
+                "basis": "four exact signed32 outputs, write acceptance defines completion"
+              }
+            ],
+            "buffers": [
+              {
+                "id": "b_5af",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "storage_reference": "m_6d4",
+                "basis": "row-major address row*3+column",
+                "objects": [
+                  {
+                    "id": "o_39b",
+                    "shape": [
+                      "f_rows",
+                      "f_columns"
+                    ],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_46a",
+                      "s_239"
+                    ],
+                    "basis": "complete runtime input matrix"
+                  }
+                ]
+              },
+              {
+                "id": "b_d42",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "storage_reference": "m_c91",
+                "basis": "runtime coefficient bytes, refreshed each task",
+                "objects": [
+                  {
+                    "id": "o_894",
+                    "shape": [
+                      "f_columns"
+                    ],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_46a",
+                      "s_239"
+                    ],
+                    "basis": "complete runtime coefficient vector"
+                  }
+                ]
+              },
+              {
+                "id": "b_027",
+                "kind": "register",
+                "count": 1,
+                "depth": 1,
+                "width": 160,
+                "basis": "command, accumulators, pending address/byte and finite counters",
+                "objects": [
+                  {
+                    "id": "o_c1d",
+                    "shape": [],
+                    "element_bits": 64,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "captured command"
+                  },
+                  {
+                    "id": "o_4ae",
+                    "shape": [
+                      1
+                    ],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one signed32 accumulator per lane"
+                  },
+                  {
+                    "id": "o_632",
+                    "shape": [],
+                    "element_bits": 16,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one pending external read address"
+                  },
+                  {
+                    "id": "o_c83",
+                    "shape": [],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one held read response byte"
+                  },
+                  {
+                    "id": "o_27c",
+                    "shape": [],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "finite FSM and counters"
+                  }
+                ]
+              },
+              {
+                "id": "b_6ae",
+                "kind": "register",
+                "count": 1,
+                "depth": 4,
+                "width": 32,
+                "basis": "reserve four output words throughout the task",
+                "objects": [
+                  {
+                    "id": "o_429",
+                    "shape": [
+                      "f_rows"
+                    ],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "all four final exact outputs; conservative reservation from task start"
+                  }
+                ]
+              }
+            ],
+            "storage_phases": [
+              {
+                "id": "s_813",
+                "basis": "dispatch"
+              },
+              {
+                "id": "s_46a",
+                "basis": "load inputs/weights"
+              },
+              {
+                "id": "s_239",
+                "basis": "direct compute"
+              },
+              {
+                "id": "s_10f",
+                "basis": "write outputs"
+              },
+              {
+                "id": "s_c41",
+                "basis": "DONE"
+              }
+            ],
+            "schedule_windows": [
+              {
+                "id": "v_72f",
+                "workload": "w_a24",
+                "cycles": 2,
+                "reads": [
+                  {
+                    "id": "p_7e1",
+                    "storage_reference": "m_6d4",
+                    "instance": 0,
+                    "word_address": 0,
+                    "cycle": 0
+                  },
+                  {
+                    "id": "p_839",
+                    "storage_reference": "m_c91",
+                    "instance": 0,
+                    "word_address": 0,
+                    "cycle": 0
+                  }
+                ],
+                "writes": [],
+                "uses": [
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 0,
+                    "operand": "input",
+                    "read_id": "p_7e1",
+                    "bit_offset": 0,
+                    "width": 8
+                  },
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 0,
+                    "operand": "weight",
+                    "read_id": "p_839",
+                    "bit_offset": 0,
+                    "width": 8
+                  }
+                ],
+                "repetition_basis": "First column of the first row or row pair; identical per-column requests repeat for every one of the three columns and all four rows, with final-row completion and no padding.",
+                "basis": "One distinct physical input read per lane and one weight read; synchronous words become available next cycle and the weight byte broadcasts."
+              }
+            ],
+            "area_components": [
+              {
+                "id": "r_e94",
+                "kind": "logic",
+                "count": 1,
+                "unit_area_lower": "f_lane_area",
+                "unit_area_upper": "f_lane_area",
+                "source": "prescribed exercise component estimate in spec.md",
+                "uncertainty": "estimate only; not calibrated synthesis",
+                "basis": "signed 8x8 multiplier and signed32 accumulate logic excluding separately priced registers"
+              },
+              {
+                "id": "r_b37",
+                "kind": "logic",
+                "count": 1,
+                "unit_area_lower": "f_ctrl_a",
+                "unit_area_upper": "f_ctrl_a",
+                "source": "prescribed exercise controller estimate",
+                "uncertainty": "estimate only",
+                "basis": "command decode, counters, pending-read control, output serializer and DONE"
+              },
+              {
+                "id": "r_514",
+                "kind": "logic",
+                "count": 1,
+                "unit_area_lower": "f_regs_a",
+                "unit_area_upper": "f_regs_a",
+                "source": "prescribed full register-inventory estimate",
+                "uncertainty": "estimate only",
+                "basis": "all state/output register storage is included",
+                "covers_buffers": [
+                  "b_027",
+                  "b_6ae"
+                ]
+              }
+            ],
+            "coverage": {
+              "cost_groups": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "traffic": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "buffers": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "schedule_windows": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "area_components": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              }
+            },
+            "risks": [
+              "physical timing and actual execution remain downstream; no claim of synthesis or complete implementation closure"
+            ]
+          },
+          {
+            "id": "c_6ba",
+            "organization": "two independent row MACs with runtime weight broadcast",
+            "assumptions": [
+              {
+                "id": "a_lanes",
+                "value": 2,
+                "unit": "count",
+                "basis": "chosen physical MAC count"
+              }
+            ],
+            "calculations": [],
+            "macros": [
+              {
+                "name": "m_6d4",
+                "kind": "SRAM",
+                "count": 2,
+                "depth": 8,
+                "width": 8,
+                "ports_and_schedule": "input rows interleaved by row parity; address floor(row/2)*3+column; 1R1W, latency one"
+              },
+              {
+                "name": "m_c91",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "ports_and_schedule": "one coefficient read per column step, broadcast to both lanes if present; 1R1W latency one"
+              }
+            ],
+            "metrics": {
+              "q_418": {
+                "status": "unverified",
+                "reason": "physical timing and library characterization remain implementation evidence"
+              }
+            },
+            "workloads": [
+              {
+                "id": "w_a24",
+                "clock_fact": "f_clock",
+                "components": [
+                  {
+                    "id": "i_start",
+                    "composition": "serial",
+                    "references": [
+                      "g_f64"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_load",
+                    "composition": "serial",
+                    "references": [
+                      "g_194"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_dot",
+                    "composition": "serial",
+                    "references": [
+                      "g_295"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_store",
+                    "composition": "serial",
+                    "references": [
+                      "g_b71"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_done",
+                    "composition": "serial",
+                    "references": [
+                      "g_782"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  }
+                ]
+              }
+            ],
+            "resource_checks": [
+              {
+                "id": "r_8af",
+                "demand_per_cycle": 2,
+                "supply_per_cycle": 2,
+                "unit": "MAC/cycle",
+                "basis": "one MAC per actual lane per cycle"
+              },
+              {
+                "id": "r_436",
+                "demand_per_cycle": 1,
+                "supply_per_cycle": 1,
+                "unit": "byte/cycle",
+                "basis": "one external byte request/response per cycle under stated performance conditions"
+              }
+            ],
+            "abi_fields": [
+              {
+                "name": "opcode",
+                "width": 8,
+                "offset": 56,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "input_base",
+                "width": 16,
+                "offset": 40,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "weight_base",
+                "width": 16,
+                "offset": 24,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "output_base",
+                "width": 16,
+                "offset": 8,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "reserved_zero",
+                "width": 8,
+                "offset": 0,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              }
+            ],
+            "cost_groups": [
+              {
+                "id": "g_f64",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_c72"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 1,
+                "basis": "one dispatch cycle"
+              },
+              {
+                "id": "g_194",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_b9a"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 16,
+                "basis": "15 pipelined byte reads plus one synchronous response drain cycle; one pending credit reused on response acceptance"
+              },
+              {
+                "id": "g_b71",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_a37"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 16,
+                "basis": "16 consecutive byte writes, each counted at acceptance"
+              },
+              {
+                "id": "g_782",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_82f"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 1,
+                "basis": "one ready DONE response cycle after all writes"
+              },
+              {
+                "id": "g_295",
+                "model": "compute",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_65e",
+                  "u_4d1"
+                ],
+                "resources": [
+                  "r_e94",
+                  "m_6d4",
+                  "m_c91"
+                ],
+                "units": 2,
+                "operations_per_unit_cycle": 1,
+                "overhead_cycles": 1,
+                "basis": "direct source MACs at one MAC per lane per cycle; one synchronous input-read pipeline fill; row-zero select is included"
+              }
+            ],
+            "traffic": [
+              {
+                "id": "t_847",
+                "model": "continuous_reserved",
+                "payload_bytes": 15,
+                "transfers": 1,
+                "alignment_bytes": 1,
+                "transaction_bytes": 1,
+                "latency_cycles": 1,
+                "transactions_per_cycle": 1,
+                "inflight": 1,
+                "response_buffer_bytes": 1,
+                "basis": "12 input and 3 weight bytes, one response slot per pending read"
+              },
+              {
+                "id": "t_a85",
+                "model": "posted_write",
+                "payload_bytes": 16,
+                "transfers": 1,
+                "alignment_bytes": 1,
+                "transaction_bytes": 1,
+                "basis": "four exact signed32 outputs, write acceptance defines completion"
+              }
+            ],
+            "buffers": [
+              {
+                "id": "b_5af",
+                "kind": "SRAM",
+                "count": 2,
+                "depth": 8,
+                "width": 8,
+                "storage_reference": "m_6d4",
+                "basis": "input rows interleaved by row parity; address floor(row/2)*3+column",
+                "objects": [
+                  {
+                    "id": "o_39b",
+                    "shape": [
+                      "f_rows",
+                      "f_columns"
+                    ],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_46a",
+                      "s_239"
+                    ],
+                    "basis": "complete runtime input matrix"
+                  }
+                ]
+              },
+              {
+                "id": "b_d42",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "storage_reference": "m_c91",
+                "basis": "runtime coefficient bytes, refreshed each task",
+                "objects": [
+                  {
+                    "id": "o_894",
+                    "shape": [
+                      "f_columns"
+                    ],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_46a",
+                      "s_239"
+                    ],
+                    "basis": "complete runtime coefficient vector"
+                  }
+                ]
+              },
+              {
+                "id": "b_027",
+                "kind": "register",
+                "count": 1,
+                "depth": 1,
+                "width": 192,
+                "basis": "command, accumulators, pending address/byte and finite counters",
+                "objects": [
+                  {
+                    "id": "o_c1d",
+                    "shape": [],
+                    "element_bits": 64,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "captured command"
+                  },
+                  {
+                    "id": "o_4ae",
+                    "shape": [
+                      2
+                    ],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one signed32 accumulator per lane"
+                  },
+                  {
+                    "id": "o_632",
+                    "shape": [],
+                    "element_bits": 16,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one pending external read address"
+                  },
+                  {
+                    "id": "o_c83",
+                    "shape": [],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one held read response byte"
+                  },
+                  {
+                    "id": "o_27c",
+                    "shape": [],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "finite FSM and counters"
+                  }
+                ]
+              },
+              {
+                "id": "b_6ae",
+                "kind": "register",
+                "count": 1,
+                "depth": 4,
+                "width": 32,
+                "basis": "reserve four output words throughout the task",
+                "objects": [
+                  {
+                    "id": "o_429",
+                    "shape": [
+                      "f_rows"
+                    ],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "all four final exact outputs; conservative reservation from task start"
+                  }
+                ]
+              }
+            ],
+            "storage_phases": [
+              {
+                "id": "s_813",
+                "basis": "dispatch"
+              },
+              {
+                "id": "s_46a",
+                "basis": "load inputs/weights"
+              },
+              {
+                "id": "s_239",
+                "basis": "direct compute"
+              },
+              {
+                "id": "s_10f",
+                "basis": "write outputs"
+              },
+              {
+                "id": "s_c41",
+                "basis": "DONE"
+              }
+            ],
+            "schedule_windows": [
+              {
+                "id": "v_72f",
+                "workload": "w_a24",
+                "cycles": 2,
+                "reads": [
+                  {
+                    "id": "p_7e1",
+                    "storage_reference": "m_6d4",
+                    "instance": 0,
+                    "word_address": 0,
+                    "cycle": 0
+                  },
+                  {
+                    "id": "p_839",
+                    "storage_reference": "m_c91",
+                    "instance": 0,
+                    "word_address": 0,
+                    "cycle": 0
+                  },
+                  {
+                    "id": "p_316",
+                    "storage_reference": "m_6d4",
+                    "instance": 1,
+                    "word_address": 0,
+                    "cycle": 0
+                  }
+                ],
+                "writes": [],
+                "uses": [
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 0,
+                    "operand": "input",
+                    "read_id": "p_7e1",
+                    "bit_offset": 0,
+                    "width": 8
+                  },
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 0,
+                    "operand": "weight",
+                    "read_id": "p_839",
+                    "bit_offset": 0,
+                    "width": 8
+                  },
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 1,
+                    "operand": "input",
+                    "read_id": "p_316",
+                    "bit_offset": 0,
+                    "width": 8
+                  },
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 1,
+                    "operand": "weight",
+                    "read_id": "p_839",
+                    "bit_offset": 0,
+                    "width": 8
+                  }
+                ],
+                "repetition_basis": "First column of the first row or row pair; identical per-column requests repeat for every one of the three columns and all four rows, with final-row completion and no padding.",
+                "basis": "One distinct physical input read per lane and one weight read; synchronous words become available next cycle and the weight byte broadcasts."
+              }
+            ],
+            "area_components": [
+              {
+                "id": "r_e94",
+                "kind": "logic",
+                "count": 2,
+                "unit_area_lower": "f_lane_area",
+                "unit_area_upper": "f_lane_area",
+                "source": "prescribed exercise component estimate in spec.md",
+                "uncertainty": "estimate only; not calibrated synthesis",
+                "basis": "signed 8x8 multiplier and signed32 accumulate logic excluding separately priced registers"
+              },
+              {
+                "id": "r_b37",
+                "kind": "logic",
+                "count": 1,
+                "unit_area_lower": "f_ctrl_b",
+                "unit_area_upper": "f_ctrl_b",
+                "source": "prescribed exercise controller estimate",
+                "uncertainty": "estimate only",
+                "basis": "command decode, counters, pending-read control, output serializer and DONE"
+              },
+              {
+                "id": "r_514",
+                "kind": "logic",
+                "count": 1,
+                "unit_area_lower": "f_regs_b",
+                "unit_area_upper": "f_regs_b",
+                "source": "prescribed full register-inventory estimate",
+                "uncertainty": "estimate only",
+                "basis": "all state/output register storage is included",
+                "covers_buffers": [
+                  "b_027",
+                  "b_6ae"
+                ]
+              }
+            ],
+            "coverage": {
+              "cost_groups": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "traffic": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "buffers": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "schedule_windows": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "area_components": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              }
+            },
+            "risks": [
+              "physical timing and actual execution remain downstream; no claim of synthesis or complete implementation closure"
+            ]
+          }
+        ],
+        "selected": "c_275",
+        "selection_conditions": [],
+        "revision_response": [],
+        "requirement_corrections": [],
+        "architecture_md": "# Microarchitecture\n\n## Requirements and selection\nCompute four exact three-term signed8 dot products using fresh runtime inputs/weights. The selected candidate c_275 has one MAC; candidate c_6ba uses two independent row MACs sharing a coefficient broadcast. Select c_275 for smaller prescribed area. Both use 256 macro bits. Estimated total areas are 0.2625 mm2 and 0.3475 mm2 under the supplied abstract density/component costs, below 0.5 mm2. These are estimates, not synthesis.\nAt the 2 MHz clock objective, selected total latency is 39 cycles and estimated throughput is 205128.205128 item/s; the alternative is 37 cycles and 216216.216216 item/s. The 250000 item/s soft objective is not attained. This shortfall is disclosed; it is not a hard-budget waiver or a measured result.\n\n## Modules, storage and numerical path\nCommand/control copies the accepted 64-bit word, owns fixed row/column counters and one external pending-read credit. An input cache contains all 12 bytes; a separate coefficient cache contains three bytes. Each cache instance has the supplied 1R1W, one-cycle synchronous capability. Selected input bank: instance 0, word 3*i+j. Alternative: instance i%2, word floor(i/2)*3+j. Each active row uses a signed 8x8 product and signed32 accumulator, resetting the accumulator by selecting zero for its first term. The alternative has two accumulators, processes rows (0,1) then (2,3), and broadcasts each coefficient to both lanes. Four output registers retain complete results until serialized.\nInputs preserve their exact signed8 two's-complement values. Products use signed16, accumulation and outputs use signed32. For three terms, each product lies in [-16256,16384] and each sum in [-48768,49152], which fits signed32. There is no rounding, saturation, nonlinear function or approximation. Numerical RTL execution remains an implementation check.\n\n## Complete-task schedule and finite flow control\nDispatch costs one cycle. Then issue 15 external byte reads and consume their one-cycle responses in a 16-cycle load interval. Reuse the single pending credit only when its response is accepted; readiness can retire one read and issue the next in the same cycle. A held response byte is explicit storage. Internal cache writes occur during load, never concurrently with compute reads.\nCompute uses the direct per-row, per-column loop: issue one input and coefficient read per active row lane each column step, then consume both on the following cycle. Pipeline II is one cycle per MAC. The first read contributes one fill cycle. Selected compute is declared as 5 cycles; alternative compute is 3 cycles. Row accumulators initialize at their first column without an extra arithmetic slot. Output follows compute, with 16 accepted byte writes over 16 cycles. A final one-cycle DONE response follows the last write. No overlap is claimed between the five intervals. The physical-window evidence shows one representative column step; the loop and row-pair mapping define its repetitions and tails.\nUnder backpressure, pending memory address/data/write-enable and response values remain stable; byte/column/row counters and credits advance only on their relevant accepted events. Never issue a second read while a previous read lacks reserved response storage. DONE waits for all writes; a stalled DONE response blocks acceptance of another command. Consecutive tasks clear task counters and overwrite input/weight caches without requiring reset. Reset_n initializes or aborts control; it does not imply a task-level reset transaction.\n\n## Exact ABI and layout\nAccept opcode 0x3D in cmd[63:56]; cmd[55:40] is the 16-bit input byte base, cmd[39:24] the weight byte base, cmd[23:8] the output byte base, and cmd[7:0] must be zero. All bases are byte addresses. Validate nonoverlapping regions of 12, 3 and 16 bytes and base+length<=65536; invalid commands return rsp=0xE1 without memory requests. Inputs are dense row-major: address input_base+3*i+j for 0<=i<4, 0<=j<3. Weight address is weight_base+j. Output word i begins at output_base+4*i, little endian; byte b is bits [8*b+7:8*b] of that signed32 result. There is no tensor padding or data-dependent layout. All full-byte writes use the only byte strobe. Completion uses rsp=0xB6 with valid/ready. The response holds until accepted.\n\n## Evidence and next-stage obligations\nSource work, exact scope traces, cost groups, object/phase storage demands, physical operand uses, finite credits, complete-task cycles and area inventory are in the associated structured proposal and executed budget report. The supplied macro/logic costs and stated no-stall conditions define the estimate. Physical library timing, clock uncertainty, I/O loads, actual RTL protocol behavior and numerical execution remain explicit implementation evidence; this report contains no RTL and claims no physical closure.\n"
+      },
+      "private_expectations": {
+        "expected_verdicts": [
+          "revise"
+        ],
+        "required_classification": "source-count or direct schedule inconsistency; not a mere arithmetic/serialization failure",
+        "necessary_witness": "The reference has 4 rows and 3 terms, requiring 12 direct MACs. The submitted source recipe k=1 derives 4 MACs. With the proposed 1 MAC/cycle direct loop and one read fill, selected compute requires 13 cycles, not 5; full task requires 47, not 39.",
+        "counterexample": {
+          "values": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "weights": [
+            4,
+            5,
+            6
+          ],
+          "correct_outputs": [
+            32,
+            32,
+            32,
+            32
+          ],
+          "first_product_only_outputs": [
+            4,
+            4,
+            4,
+            4
+          ]
+        },
+        "false_rejection_categories": [
+          "Treating only the unmet soft throughput objective as a hard failure",
+          "Demanding a complete RTL/physical implementation before architecture audit",
+          "Rejecting the shared broadcast or requiring one module per reference loop",
+          "Demonstrating only calculator arithmetic and overlooking missing dominant work"
+        ]
+      }
+    },
+    {
+      "id": "9af1736d",
+      "input": {
+        "spec.md": "# Small linear task\n\nOne task has 4 input rows with 3 elements per row and 3 runtime weights. All input elements and weights are signed 8-bit integers in [-128,127]. Return 4 exact signed 32-bit dot products. No approximation or weight specialization is allowed.\nInput values and weights can change on every task. Consecutive tasks require no external reset. Power-on reset initializes control; the implementer chooses the task ABI. The active-low reset_n input may abort a task; completion is not required after an asserted reset.\nThe physical ports are cmd[63:0] with valid/ready, rsp[7:0] with valid/ready, and a byte-addressed memory port with 16 address bits and 8 data bits. Memory requests have valid/ready, read/write, address, write data and one write-strobe bit. Read responses are ordered valid/ready byte values; writes complete when their requests are accepted. Preserve pending values under backpressure and issue DONE only after all output writes are accepted.\nFor the performance estimate, memory accepts 1 request per cycle and returns each read after exactly 1 cycle; command/response/output acceptance has no stalls. Arbitrary finite backpressure must preserve functional behavior, although it extends latency.\nThe abstract SRAM capability is 1 read port and 1 write port per instance, synchronous read latency 1 cycle, minimum depth 8 and width multiple 8. There is no required bank count or cache organization. Register storage is permitted. Internal reads issued during cycle c become available at the beginning of cycle c+1; the arithmetic operation can run in that cycle and commit at its end.\nHard estimated area limit is 0.5 mm2. Hard total macro capacity limit is 512 bits. The design clock objective is 2 MHz. The throughput objective is 250000 item/s, where one item is one output row. Throughput is a soft objective: a design missing it can be delivered if the shortfall is stated and hard requirements are met.\nFor this synthetic architecture exercise, use abstract macro density 4096 bit/mm2. Component cost estimates excluding macros are 0.07 mm2 per signed 8x8 multiply/32-bit accumulate lane, 0.09 mm2 for the single-lane controller or 0.10 mm2 for the two-lane controller, and 0.04 mm2 for the single-lane register inventory or 0.045 mm2 for the two-lane register inventory. These are prescribed estimates for comparison, not measurements or synthesis. The register inventory includes command, counters, pending read address/data, accumulators and all four output words.\nPhysical library timing, clock uncertainty, I/O loads and RTL execution are outside this exercise and remain implementation evidence. The architecture must decide its complete ABI, numerical scheme, finite flow control, storage and schedule before delivery.\n",
+        "reference.py": "def dot_task(values, weights):\n    assert len(values) == 4\n    assert len(weights) == 3\n    result = []\n    for row in values:\n        assert len(row) == 3\n        total = 0\n        for column in range(3):\n            total += int(row[column]) * int(weights[column])\n        result.append(total)\n    return result\n"
+      },
+      "proposal": {
+        "requirements": {
+          "facts": [
+            {
+              "id": "f_rows",
+              "value": 4,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "One task has 4 input rows with 3 elements per row and 3 runtime weights.",
+                  "start": 3,
+                  "end": 3
+                }
+              ]
+            },
+            {
+              "id": "f_columns",
+              "value": 3,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "One task has 4 input rows with 3 elements per row and 3 runtime weights.",
+                  "start": 3,
+                  "end": 3
+                }
+              ]
+            },
+            {
+              "id": "f_clock",
+              "value": 2,
+              "unit": "MHz",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "The design clock objective is 2 MHz.",
+                  "start": 8,
+                  "end": 8
+                }
+              ]
+            },
+            {
+              "id": "f_objective",
+              "value": 250000,
+              "unit": "item/s",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "The throughput objective is 250000 item/s, where one item is one output row.",
+                  "start": 8,
+                  "end": 8
+                }
+              ]
+            },
+            {
+              "id": "f_area",
+              "value": 0.5,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "Hard estimated area limit is 0.5 mm2.",
+                  "start": 8,
+                  "end": 8
+                }
+              ]
+            },
+            {
+              "id": "f_capacity",
+              "value": 512,
+              "unit": "bits",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "Hard total macro capacity limit is 512 bits.",
+                  "start": 8,
+                  "end": 8
+                }
+              ]
+            },
+            {
+              "id": "f_density",
+              "value": 4096,
+              "unit": "bit/mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "use abstract macro density 4096 bit/mm2.",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "f_depth",
+              "value": 8,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "minimum depth 8 and width multiple 8.",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "f_width",
+              "value": 8,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "minimum depth 8 and width multiple 8.",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "f_rports",
+              "value": 1,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "1 read port and 1 write port per instance",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "f_wports",
+              "value": 1,
+              "unit": "count",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "1 read port and 1 write port per instance",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "f_latency",
+              "value": 1,
+              "unit": "cycles",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "synchronous read latency 1 cycle",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "f_lane_area",
+              "value": 0.07,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "0.07 mm2 per signed 8x8 multiply/32-bit accumulate lane",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "f_ctrl_a",
+              "value": 0.09,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "0.09 mm2 for the single-lane controller",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "f_ctrl_b",
+              "value": 0.1,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "0.10 mm2 for the two-lane controller",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "f_regs_a",
+              "value": 0.04,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "0.04 mm2 for the single-lane register inventory",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "f_regs_b",
+              "value": 0.045,
+              "unit": "mm2",
+              "citations": [
+                {
+                  "file": "spec.md",
+                  "quote": "0.045 mm2 for the two-lane register inventory",
+                  "start": 9,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "constraints": [
+            {
+              "id": "q_68d",
+              "limit": "f_area",
+              "kind": "hard",
+              "relation": "<=",
+              "unit": "mm2",
+              "verification": "estimate",
+              "quantity": "area"
+            },
+            {
+              "id": "q_73b",
+              "limit": "f_capacity",
+              "kind": "hard",
+              "relation": "<=",
+              "unit": "bits",
+              "verification": "estimate",
+              "quantity": "capacity"
+            },
+            {
+              "id": "q_c52",
+              "limit": "f_objective",
+              "kind": "target",
+              "relation": ">=",
+              "unit": "item/s",
+              "verification": "estimate",
+              "quantity": "items_per_second",
+              "workload": "w_a24"
+            },
+            {
+              "id": "q_418",
+              "limit": "f_clock",
+              "kind": "target",
+              "relation": ">=",
+              "unit": "MHz",
+              "verification": "implementation",
+              "quantity": "clock"
+            }
+          ],
+          "runtime_parameters": [],
+          "open_conditions": [
+            "Physical library timing, clock uncertainty, I/O loads and RTL execution remain implementation evidence."
+          ],
+          "functional_obligations": [
+            "Every output is the exact three-term signed dot product; all operands are runtime data.",
+            "Backpressure preserves pending requests/responses; DONE follows accepted output writes; no reset between tasks."
+          ],
+          "storage_area_model": {
+            "status": "supplied",
+            "density_fact": "f_density"
+          },
+          "storage_rules": [
+            {
+              "kind": "SRAM",
+              "min_depth": "f_depth",
+              "width_multiple": "f_width",
+              "read_ports": "f_rports",
+              "write_ports": "f_wports",
+              "read_latency_cycles": "f_latency"
+            }
+          ]
+        },
+        "work_model": {
+          "workloads": [
+            {
+              "id": "w_a24",
+              "quantity": "f_rows",
+              "unit": "rows",
+              "basis": "one fixed task has four output rows"
+            }
+          ],
+          "items": [
+            {
+              "id": "u_c72",
+              "category": "control",
+              "semantics": "Accept and copy the command and initialize per-task counters",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [],
+              "count": {
+                "kind": "none",
+                "reason": "nonarithmetic command/control"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "task",
+                  "axis": "task"
+                }
+              },
+              "references": [
+                {
+                  "file": "spec.md",
+                  "quote": "the implementer chooses the task ABI.",
+                  "start": 4,
+                  "end": 4
+                }
+              ]
+            },
+            {
+              "id": "u_b9a",
+              "category": "movement",
+              "semantics": "Load all twelve input bytes and three runtime coefficient bytes",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [
+                "u_c72"
+              ],
+              "count": {
+                "kind": "none",
+                "reason": "traffic, not arithmetic"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "task",
+                  "axis": "task"
+                }
+              },
+              "references": [
+                {
+                  "file": "spec.md",
+                  "quote": "One task has 4 input rows with 3 elements per row and 3 runtime weights.",
+                  "start": 3,
+                  "end": 3
+                }
+              ]
+            },
+            {
+              "id": "u_65e",
+              "category": "state",
+              "semantics": "Set each row accumulator to zero before its first product",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [
+                "u_b9a"
+              ],
+              "count": {
+                "kind": "none",
+                "reason": "zero select within row start, no arithmetic count"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "element",
+                  "axis": "row",
+                  "multiplicity": 1
+                }
+              },
+              "references": [
+                {
+                  "file": "reference.py",
+                  "quote": "total = 0",
+                  "start": 7,
+                  "end": 7
+                }
+              ]
+            },
+            {
+              "id": "u_4d1",
+              "category": "compute",
+              "semantics": "Direct signed dot product for every output row, with one MAC per source term",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [
+                "u_65e"
+              ],
+              "count": {
+                "kind": "matmul",
+                "m": 1,
+                "n": 1,
+                "k": "f_columns",
+                "batch": 1,
+                "unit": "MAC"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "element",
+                  "axis": "row",
+                  "multiplicity": 1
+                }
+              },
+              "references": [
+                {
+                  "file": "reference.py",
+                  "quote": "for column in range(3):\n            total += int(row[column]) * int(weights[column])",
+                  "start": 8,
+                  "end": 9
+                }
+              ]
+            },
+            {
+              "id": "u_a37",
+              "category": "movement",
+              "semantics": "Write four little-endian signed32 output words as sixteen accepted bytes",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [
+                "u_4d1"
+              ],
+              "count": {
+                "kind": "none",
+                "reason": "output traffic, not arithmetic"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "task",
+                  "axis": "task"
+                }
+              },
+              "references": [
+                {
+                  "file": "spec.md",
+                  "quote": "Return 4 exact signed 32-bit dot products.",
+                  "start": 3,
+                  "end": 3
+                }
+              ]
+            },
+            {
+              "id": "u_82f",
+              "category": "control",
+              "semantics": "Publish DONE only after the final output write acceptance",
+              "condition": "one fixed legal task",
+              "state_lifetime": "task-local; weights and inputs refreshed every task",
+              "status": "complete",
+              "dependencies": [
+                "u_a37"
+              ],
+              "count": {
+                "kind": "none",
+                "reason": "completion event"
+              },
+              "scopes": {
+                "w_a24": {
+                  "kind": "task",
+                  "axis": "task"
+                }
+              },
+              "references": [
+                {
+                  "file": "spec.md",
+                  "quote": "issue DONE only after all output writes are accepted.",
+                  "start": 5,
+                  "end": 5
+                }
+              ]
+            }
+          ]
+        },
+        "candidates": [
+          {
+            "id": "c_275",
+            "organization": "one serial signed MAC reused across rows",
+            "assumptions": [
+              {
+                "id": "a_lanes",
+                "value": 1,
+                "unit": "count",
+                "basis": "chosen physical MAC count"
+              }
+            ],
+            "calculations": [],
+            "macros": [
+              {
+                "name": "m_6d4",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "ports_and_schedule": "row-major address row*3+column; 1R1W, latency one"
+              },
+              {
+                "name": "m_c91",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "ports_and_schedule": "one coefficient read per column step, broadcast to both lanes if present; 1R1W latency one"
+              }
+            ],
+            "metrics": {
+              "q_418": {
+                "status": "unverified",
+                "reason": "physical timing and library characterization remain implementation evidence"
+              }
+            },
+            "workloads": [
+              {
+                "id": "w_a24",
+                "clock_fact": "f_clock",
+                "components": [
+                  {
+                    "id": "i_start",
+                    "composition": "serial",
+                    "references": [
+                      "g_f64"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_load",
+                    "composition": "serial",
+                    "references": [
+                      "g_194"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_dot",
+                    "composition": "serial",
+                    "references": [
+                      "g_295"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_store",
+                    "composition": "serial",
+                    "references": [
+                      "g_b71"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_done",
+                    "composition": "serial",
+                    "references": [
+                      "g_782"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  }
+                ]
+              }
+            ],
+            "resource_checks": [
+              {
+                "id": "r_8af",
+                "demand_per_cycle": 1,
+                "supply_per_cycle": 1,
+                "unit": "MAC/cycle",
+                "basis": "one MAC per actual lane per cycle"
+              },
+              {
+                "id": "r_436",
+                "demand_per_cycle": 1,
+                "supply_per_cycle": 1,
+                "unit": "byte/cycle",
+                "basis": "one external byte request/response per cycle under stated performance conditions"
+              }
+            ],
+            "abi_fields": [
+              {
+                "name": "opcode",
+                "width": 8,
+                "offset": 56,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "input_base",
+                "width": 16,
+                "offset": 40,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "weight_base",
+                "width": 16,
+                "offset": 24,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "output_base",
+                "width": 16,
+                "offset": 8,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "reserved_zero",
+                "width": 8,
+                "offset": 0,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              }
+            ],
+            "cost_groups": [
+              {
+                "id": "g_f64",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_c72"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 1,
+                "basis": "one dispatch cycle"
+              },
+              {
+                "id": "g_194",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_b9a"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 16,
+                "basis": "15 pipelined byte reads plus one synchronous response drain cycle; one pending credit reused on response acceptance"
+              },
+              {
+                "id": "g_b71",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_a37"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 16,
+                "basis": "16 consecutive byte writes, each counted at acceptance"
+              },
+              {
+                "id": "g_782",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_82f"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 1,
+                "basis": "one ready DONE response cycle after all writes"
+              },
+              {
+                "id": "g_295",
+                "model": "compute",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_65e",
+                  "u_4d1"
+                ],
+                "resources": [
+                  "r_e94",
+                  "m_6d4",
+                  "m_c91"
+                ],
+                "units": 1,
+                "operations_per_unit_cycle": 1,
+                "overhead_cycles": 1,
+                "basis": "direct source MACs at one MAC per lane per cycle; one synchronous input-read pipeline fill; row-zero select is included"
+              }
+            ],
+            "traffic": [
+              {
+                "id": "t_847",
+                "model": "continuous_reserved",
+                "payload_bytes": 15,
+                "transfers": 1,
+                "alignment_bytes": 1,
+                "transaction_bytes": 1,
+                "latency_cycles": 1,
+                "transactions_per_cycle": 1,
+                "inflight": 1,
+                "response_buffer_bytes": 1,
+                "basis": "12 input and 3 weight bytes, one response slot per pending read"
+              },
+              {
+                "id": "t_a85",
+                "model": "posted_write",
+                "payload_bytes": 16,
+                "transfers": 1,
+                "alignment_bytes": 1,
+                "transaction_bytes": 1,
+                "basis": "four exact signed32 outputs, write acceptance defines completion"
+              }
+            ],
+            "buffers": [
+              {
+                "id": "b_5af",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "storage_reference": "m_6d4",
+                "basis": "row-major address row*3+column",
+                "objects": [
+                  {
+                    "id": "o_39b",
+                    "shape": [
+                      "f_rows",
+                      "f_columns"
+                    ],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_46a",
+                      "s_239"
+                    ],
+                    "basis": "complete runtime input matrix"
+                  }
+                ]
+              },
+              {
+                "id": "b_d42",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "storage_reference": "m_c91",
+                "basis": "runtime coefficient bytes, refreshed each task",
+                "objects": [
+                  {
+                    "id": "o_894",
+                    "shape": [
+                      "f_columns"
+                    ],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_46a",
+                      "s_239"
+                    ],
+                    "basis": "complete runtime coefficient vector"
+                  }
+                ]
+              },
+              {
+                "id": "b_027",
+                "kind": "register",
+                "count": 1,
+                "depth": 1,
+                "width": 160,
+                "basis": "command, accumulators, pending address/byte and finite counters",
+                "objects": [
+                  {
+                    "id": "o_c1d",
+                    "shape": [],
+                    "element_bits": 64,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "captured command"
+                  },
+                  {
+                    "id": "o_4ae",
+                    "shape": [
+                      1
+                    ],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one signed32 accumulator per lane"
+                  },
+                  {
+                    "id": "o_632",
+                    "shape": [],
+                    "element_bits": 16,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one pending external read address"
+                  },
+                  {
+                    "id": "o_c83",
+                    "shape": [],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one held read response byte"
+                  },
+                  {
+                    "id": "o_27c",
+                    "shape": [],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "finite FSM and counters"
+                  }
+                ]
+              },
+              {
+                "id": "b_6ae",
+                "kind": "register",
+                "count": 1,
+                "depth": 4,
+                "width": 32,
+                "basis": "reserve four output words throughout the task",
+                "objects": [
+                  {
+                    "id": "o_429",
+                    "shape": [
+                      "f_rows"
+                    ],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "all four final exact outputs; conservative reservation from task start"
+                  }
+                ]
+              }
+            ],
+            "storage_phases": [
+              {
+                "id": "s_813",
+                "basis": "dispatch"
+              },
+              {
+                "id": "s_46a",
+                "basis": "load inputs/weights"
+              },
+              {
+                "id": "s_239",
+                "basis": "direct compute"
+              },
+              {
+                "id": "s_10f",
+                "basis": "write outputs"
+              },
+              {
+                "id": "s_c41",
+                "basis": "DONE"
+              }
+            ],
+            "schedule_windows": [
+              {
+                "id": "v_72f",
+                "workload": "w_a24",
+                "cycles": 2,
+                "reads": [
+                  {
+                    "id": "p_7e1",
+                    "storage_reference": "m_6d4",
+                    "instance": 0,
+                    "word_address": 0,
+                    "cycle": 0
+                  },
+                  {
+                    "id": "p_839",
+                    "storage_reference": "m_c91",
+                    "instance": 0,
+                    "word_address": 0,
+                    "cycle": 0
+                  }
+                ],
+                "writes": [],
+                "uses": [
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 0,
+                    "operand": "input",
+                    "read_id": "p_7e1",
+                    "bit_offset": 0,
+                    "width": 8
+                  },
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 0,
+                    "operand": "weight",
+                    "read_id": "p_839",
+                    "bit_offset": 0,
+                    "width": 8
+                  }
+                ],
+                "repetition_basis": "First column of the first row or row pair; identical per-column requests repeat for every one of the three columns and all four rows, with final-row completion and no padding.",
+                "basis": "One distinct physical input read per lane and one weight read; synchronous words become available next cycle and the weight byte broadcasts."
+              }
+            ],
+            "area_components": [
+              {
+                "id": "r_e94",
+                "kind": "logic",
+                "count": 1,
+                "unit_area_lower": "f_lane_area",
+                "unit_area_upper": "f_lane_area",
+                "source": "prescribed exercise component estimate in spec.md",
+                "uncertainty": "estimate only; not calibrated synthesis",
+                "basis": "signed 8x8 multiplier and signed32 accumulate logic excluding separately priced registers"
+              },
+              {
+                "id": "r_b37",
+                "kind": "logic",
+                "count": 1,
+                "unit_area_lower": "f_ctrl_a",
+                "unit_area_upper": "f_ctrl_a",
+                "source": "prescribed exercise controller estimate",
+                "uncertainty": "estimate only",
+                "basis": "command decode, counters, pending-read control, output serializer and DONE"
+              },
+              {
+                "id": "r_514",
+                "kind": "logic",
+                "count": 1,
+                "unit_area_lower": "f_regs_a",
+                "unit_area_upper": "f_regs_a",
+                "source": "prescribed full register-inventory estimate",
+                "uncertainty": "estimate only",
+                "basis": "all state/output register storage is included",
+                "covers_buffers": [
+                  "b_027",
+                  "b_6ae"
+                ]
+              }
+            ],
+            "coverage": {
+              "cost_groups": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "traffic": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "buffers": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "schedule_windows": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "area_components": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              }
+            },
+            "risks": [
+              "physical timing and actual execution remain downstream; no claim of synthesis or complete implementation closure"
+            ]
+          },
+          {
+            "id": "c_6ba",
+            "organization": "two independent row MACs with runtime weight broadcast",
+            "assumptions": [
+              {
+                "id": "a_lanes",
+                "value": 2,
+                "unit": "count",
+                "basis": "chosen physical MAC count"
+              }
+            ],
+            "calculations": [],
+            "macros": [
+              {
+                "name": "m_6d4",
+                "kind": "SRAM",
+                "count": 2,
+                "depth": 8,
+                "width": 8,
+                "ports_and_schedule": "input rows interleaved by row parity; address floor(row/2)*3+column; 1R1W, latency one"
+              },
+              {
+                "name": "m_c91",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "ports_and_schedule": "one coefficient read per column step, broadcast to both lanes if present; 1R1W latency one"
+              }
+            ],
+            "metrics": {
+              "q_418": {
+                "status": "unverified",
+                "reason": "physical timing and library characterization remain implementation evidence"
+              }
+            },
+            "workloads": [
+              {
+                "id": "w_a24",
+                "clock_fact": "f_clock",
+                "components": [
+                  {
+                    "id": "i_start",
+                    "composition": "serial",
+                    "references": [
+                      "g_f64"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_load",
+                    "composition": "serial",
+                    "references": [
+                      "g_194"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_dot",
+                    "composition": "serial",
+                    "references": [
+                      "g_295"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_store",
+                    "composition": "serial",
+                    "references": [
+                      "g_b71"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  },
+                  {
+                    "id": "i_done",
+                    "composition": "serial",
+                    "references": [
+                      "g_782"
+                    ],
+                    "basis": "strict complete-task order: dispatch, load, compute, output, DONE"
+                  }
+                ]
+              }
+            ],
+            "resource_checks": [
+              {
+                "id": "r_8af",
+                "demand_per_cycle": 2,
+                "supply_per_cycle": 2,
+                "unit": "MAC/cycle",
+                "basis": "one MAC per actual lane per cycle"
+              },
+              {
+                "id": "r_436",
+                "demand_per_cycle": 1,
+                "supply_per_cycle": 1,
+                "unit": "byte/cycle",
+                "basis": "one external byte request/response per cycle under stated performance conditions"
+              }
+            ],
+            "abi_fields": [
+              {
+                "name": "opcode",
+                "width": 8,
+                "offset": 56,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "input_base",
+                "width": 16,
+                "offset": 40,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "weight_base",
+                "width": 16,
+                "offset": 24,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "output_base",
+                "width": 16,
+                "offset": 8,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              },
+              {
+                "name": "reserved_zero",
+                "width": 8,
+                "offset": 0,
+                "carrier_width": 64,
+                "carrier": "c_931"
+              }
+            ],
+            "cost_groups": [
+              {
+                "id": "g_f64",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_c72"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 1,
+                "basis": "one dispatch cycle"
+              },
+              {
+                "id": "g_194",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_b9a"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 16,
+                "basis": "15 pipelined byte reads plus one synchronous response drain cycle; one pending credit reused on response acceptance"
+              },
+              {
+                "id": "g_b71",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_a37"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 16,
+                "basis": "16 consecutive byte writes, each counted at acceptance"
+              },
+              {
+                "id": "g_782",
+                "model": "cycles",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_82f"
+                ],
+                "resources": [
+                  "r_b37"
+                ],
+                "cycles": 1,
+                "basis": "one ready DONE response cycle after all writes"
+              },
+              {
+                "id": "g_295",
+                "model": "compute",
+                "workload": "w_a24",
+                "work_ids": [
+                  "u_65e",
+                  "u_4d1"
+                ],
+                "resources": [
+                  "r_e94",
+                  "m_6d4",
+                  "m_c91"
+                ],
+                "units": 2,
+                "operations_per_unit_cycle": 1,
+                "overhead_cycles": 1,
+                "basis": "direct source MACs at one MAC per lane per cycle; one synchronous input-read pipeline fill; row-zero select is included"
+              }
+            ],
+            "traffic": [
+              {
+                "id": "t_847",
+                "model": "continuous_reserved",
+                "payload_bytes": 15,
+                "transfers": 1,
+                "alignment_bytes": 1,
+                "transaction_bytes": 1,
+                "latency_cycles": 1,
+                "transactions_per_cycle": 1,
+                "inflight": 1,
+                "response_buffer_bytes": 1,
+                "basis": "12 input and 3 weight bytes, one response slot per pending read"
+              },
+              {
+                "id": "t_a85",
+                "model": "posted_write",
+                "payload_bytes": 16,
+                "transfers": 1,
+                "alignment_bytes": 1,
+                "transaction_bytes": 1,
+                "basis": "four exact signed32 outputs, write acceptance defines completion"
+              }
+            ],
+            "buffers": [
+              {
+                "id": "b_5af",
+                "kind": "SRAM",
+                "count": 2,
+                "depth": 8,
+                "width": 8,
+                "storage_reference": "m_6d4",
+                "basis": "input rows interleaved by row parity; address floor(row/2)*3+column",
+                "objects": [
+                  {
+                    "id": "o_39b",
+                    "shape": [
+                      "f_rows",
+                      "f_columns"
+                    ],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_46a",
+                      "s_239"
+                    ],
+                    "basis": "complete runtime input matrix"
+                  }
+                ]
+              },
+              {
+                "id": "b_d42",
+                "kind": "SRAM",
+                "count": 1,
+                "depth": 16,
+                "width": 8,
+                "storage_reference": "m_c91",
+                "basis": "runtime coefficient bytes, refreshed each task",
+                "objects": [
+                  {
+                    "id": "o_894",
+                    "shape": [
+                      "f_columns"
+                    ],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_46a",
+                      "s_239"
+                    ],
+                    "basis": "complete runtime coefficient vector"
+                  }
+                ]
+              },
+              {
+                "id": "b_027",
+                "kind": "register",
+                "count": 1,
+                "depth": 1,
+                "width": 192,
+                "basis": "command, accumulators, pending address/byte and finite counters",
+                "objects": [
+                  {
+                    "id": "o_c1d",
+                    "shape": [],
+                    "element_bits": 64,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "captured command"
+                  },
+                  {
+                    "id": "o_4ae",
+                    "shape": [
+                      2
+                    ],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one signed32 accumulator per lane"
+                  },
+                  {
+                    "id": "o_632",
+                    "shape": [],
+                    "element_bits": 16,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one pending external read address"
+                  },
+                  {
+                    "id": "o_c83",
+                    "shape": [],
+                    "element_bits": 8,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "one held read response byte"
+                  },
+                  {
+                    "id": "o_27c",
+                    "shape": [],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "finite FSM and counters"
+                  }
+                ]
+              },
+              {
+                "id": "b_6ae",
+                "kind": "register",
+                "count": 1,
+                "depth": 4,
+                "width": 32,
+                "basis": "reserve four output words throughout the task",
+                "objects": [
+                  {
+                    "id": "o_429",
+                    "shape": [
+                      "f_rows"
+                    ],
+                    "element_bits": 32,
+                    "copies": 1,
+                    "alignment_bits": 8,
+                    "metadata_bits": 0,
+                    "live_in": [
+                      "s_813",
+                      "s_46a",
+                      "s_239",
+                      "s_10f",
+                      "s_c41"
+                    ],
+                    "basis": "all four final exact outputs; conservative reservation from task start"
+                  }
+                ]
+              }
+            ],
+            "storage_phases": [
+              {
+                "id": "s_813",
+                "basis": "dispatch"
+              },
+              {
+                "id": "s_46a",
+                "basis": "load inputs/weights"
+              },
+              {
+                "id": "s_239",
+                "basis": "direct compute"
+              },
+              {
+                "id": "s_10f",
+                "basis": "write outputs"
+              },
+              {
+                "id": "s_c41",
+                "basis": "DONE"
+              }
+            ],
+            "schedule_windows": [
+              {
+                "id": "v_72f",
+                "workload": "w_a24",
+                "cycles": 2,
+                "reads": [
+                  {
+                    "id": "p_7e1",
+                    "storage_reference": "m_6d4",
+                    "instance": 0,
+                    "word_address": 0,
+                    "cycle": 0
+                  },
+                  {
+                    "id": "p_839",
+                    "storage_reference": "m_c91",
+                    "instance": 0,
+                    "word_address": 0,
+                    "cycle": 0
+                  },
+                  {
+                    "id": "p_316",
+                    "storage_reference": "m_6d4",
+                    "instance": 1,
+                    "word_address": 0,
+                    "cycle": 0
+                  }
+                ],
+                "writes": [],
+                "uses": [
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 0,
+                    "operand": "input",
+                    "read_id": "p_7e1",
+                    "bit_offset": 0,
+                    "width": 8
+                  },
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 0,
+                    "operand": "weight",
+                    "read_id": "p_839",
+                    "bit_offset": 0,
+                    "width": 8
+                  },
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 1,
+                    "operand": "input",
+                    "read_id": "p_316",
+                    "bit_offset": 0,
+                    "width": 8
+                  },
+                  {
+                    "cost_group": "g_295",
+                    "cycle": 1,
+                    "lane": 1,
+                    "operand": "weight",
+                    "read_id": "p_839",
+                    "bit_offset": 0,
+                    "width": 8
+                  }
+                ],
+                "repetition_basis": "First column of the first row or row pair; identical per-column requests repeat for every one of the three columns and all four rows, with final-row completion and no padding.",
+                "basis": "One distinct physical input read per lane and one weight read; synchronous words become available next cycle and the weight byte broadcasts."
+              }
+            ],
+            "area_components": [
+              {
+                "id": "r_e94",
+                "kind": "logic",
+                "count": 2,
+                "unit_area_lower": "f_lane_area",
+                "unit_area_upper": "f_lane_area",
+                "source": "prescribed exercise component estimate in spec.md",
+                "uncertainty": "estimate only; not calibrated synthesis",
+                "basis": "signed 8x8 multiplier and signed32 accumulate logic excluding separately priced registers"
+              },
+              {
+                "id": "r_b37",
+                "kind": "logic",
+                "count": 1,
+                "unit_area_lower": "f_ctrl_b",
+                "unit_area_upper": "f_ctrl_b",
+                "source": "prescribed exercise controller estimate",
+                "uncertainty": "estimate only",
+                "basis": "command decode, counters, pending-read control, output serializer and DONE"
+              },
+              {
+                "id": "r_514",
+                "kind": "logic",
+                "count": 1,
+                "unit_area_lower": "f_regs_b",
+                "unit_area_upper": "f_regs_b",
+                "source": "prescribed full register-inventory estimate",
+                "uncertainty": "estimate only",
+                "basis": "all state/output register storage is included",
+                "covers_buffers": [
+                  "b_027",
+                  "b_6ae"
+                ]
+              }
+            ],
+            "coverage": {
+              "cost_groups": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "traffic": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "buffers": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "schedule_windows": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              },
+              "area_components": {
+                "status": "covered",
+                "basis": "explicit source and implementation evidence for this fixed task"
+              }
+            },
+            "risks": [
+              "physical timing and actual execution remain downstream; no claim of synthesis or complete implementation closure"
+            ]
+          }
+        ],
+        "selected": "c_275",
+        "selection_conditions": [],
+        "revision_response": [],
+        "requirement_corrections": [],
+        "architecture_md": "# Microarchitecture\n\n## Requirements and selection\nCompute four exact three-term signed8 dot products using fresh runtime inputs/weights. The selected candidate c_275 has one MAC; candidate c_6ba uses two independent row MACs sharing a coefficient broadcast. Select c_275 for smaller prescribed area. Both use 256 macro bits. Estimated total areas are 0.2625 mm2 and 0.3475 mm2 under the supplied abstract density/component costs, below 0.5 mm2. These are estimates, not synthesis.\nAt the 2 MHz clock objective, selected total latency is 47 cycles and estimated throughput is 170212.765957 item/s; the alternative is 41 cycles and 195121.951220 item/s. The 250000 item/s soft objective is not attained. This shortfall is disclosed; it is not a hard-budget waiver or a measured result.\n\n## Modules, storage and numerical path\nCommand/control copies the accepted 64-bit word, owns fixed row/column counters and one external pending-read credit. An input cache contains all 12 bytes; a separate coefficient cache contains three bytes. Each cache instance has the supplied 1R1W, one-cycle synchronous capability. Selected input bank: instance 0, word 3*i+j. Alternative: instance i%2, word floor(i/2)*3+j. Each active row uses a signed 8x8 product and signed32 accumulator, resetting the accumulator by selecting zero for its first term. The alternative has two accumulators, processes rows (0,1) then (2,3), and broadcasts each coefficient to both lanes. Four output registers retain complete results until serialized.\nInputs preserve their exact signed8 two's-complement values. Products use signed16, accumulation and outputs use signed32. For three terms, each product lies in [-16256,16384] and each sum in [-48768,49152], which fits signed32. There is no rounding, saturation, nonlinear function or approximation. Numerical RTL execution remains an implementation check.\n\n## Complete-task schedule and finite flow control\nDispatch costs one cycle. Then issue 15 external byte reads and consume their one-cycle responses in a 16-cycle load interval. Reuse the single pending credit only when its response is accepted; readiness can retire one read and issue the next in the same cycle. A held response byte is explicit storage. Internal cache writes occur during load, never concurrently with compute reads.\nCompute uses the direct per-row, per-column loop: issue one input and coefficient read per active row lane each column step, then consume both on the following cycle. Pipeline II is one cycle per MAC. The first read contributes one fill cycle. Selected compute is declared as 13 cycles; alternative compute is 7 cycles. Row accumulators initialize at their first column without an extra arithmetic slot. Output follows compute, with 16 accepted byte writes over 16 cycles. A final one-cycle DONE response follows the last write. No overlap is claimed between the five intervals. The physical-window evidence shows one representative column step; the loop and row-pair mapping define its repetitions and tails.\nUnder backpressure, pending memory address/data/write-enable and response values remain stable; byte/column/row counters and credits advance only on their relevant accepted events. Never issue a second read while a previous read lacks reserved response storage. DONE waits for all writes; a stalled DONE response blocks acceptance of another command. Consecutive tasks clear task counters and overwrite input/weight caches without requiring reset. Reset_n initializes or aborts control; it does not imply a task-level reset transaction.\n\n## Exact ABI and layout\nAccept opcode 0x3D in cmd[63:56]; cmd[55:40] is the 16-bit input byte base, cmd[39:24] the weight byte base, cmd[23:8] the output byte base, and cmd[7:0] must be zero. All bases are byte addresses. Validate nonoverlapping regions of 12, 3 and 16 bytes and base+length<=65536; invalid commands return rsp=0xE1 without memory requests. Inputs are dense row-major: address input_base+3*i+j for 0<=i<4, 0<=j<3. Weight address is weight_base+j. Output word i begins at output_base+4*i, little endian; byte b is bits [8*b+7:8*b] of that signed32 result. There is no tensor padding or data-dependent layout. All full-byte writes use the only byte strobe. Completion uses rsp=0xB6 with valid/ready. The response holds until accepted.\n\n## Evidence and next-stage obligations\nSource work, exact scope traces, cost groups, object/phase storage demands, physical operand uses, finite credits, complete-task cycles and area inventory are in the associated structured proposal and executed budget report. The supplied macro/logic costs and stated no-stall conditions define the estimate. Physical library timing, clock uncertainty, I/O loads, actual RTL protocol behavior and numerical execution remain explicit implementation evidence; this report contains no RTL and claims no physical closure.\n"
+      },
+      "private_expectations": {
+        "expected_verdicts": [
+          "accept"
+        ],
+        "permitted_unverified": [
+          "physical timing/library and I/O characterization",
+          "actual RTL functional/backpressure execution",
+          "actual exact-integer execution"
+        ],
+        "nonblocking_observations": [
+          "Both alternatives miss the explicit soft throughput objective and disclose it.",
+          "Estimates use the supplied exercise costs and do not claim synthesis."
+        ],
+        "passing_witness": "4*3=12 direct MACs, one MAC/cycle plus one read-fill -> 13 compute cycles; 1+16+13+16+1=47 full-task cycles. 2MHz*4/47=170212.765957 item/s. Area 256/4096 + 0.07 + 0.09 + 0.04 = 0.2625 mm2, capacity 256 bits; hard limits pass.",
+        "false_rejection_categories": [
+          "Upgrading 250000 item/s from a soft objective to a hard requirement",
+          "Demanding universal FIFO slack beyond the explicitly proved one-credit reservation",
+          "Demanding synthesis despite the input-defined estimate scope",
+          "Demanding nonexistent nonlinear approximations or quantization for exact signed-integer arithmetic",
+          "Rejecting exact signed32 accumulation without considering the stated three-term range",
+          "Treating a representative finite window as an exhaustive RTL proof, or requiring one particular resource organization"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+# RTL has no total call or elapsed-time cap. Each submitted tool job has an explicit timeout.
+schema_version = 1

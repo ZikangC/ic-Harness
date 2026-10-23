@@ -1,0 +1,6 @@
+read_verilog -sv -Iinput/rtl input/rtl/nano_leaf.sv input/rtl/nano_mem.sv input/rtl/nano_core.sv input/rtl/msh_chip_top.sv
+hierarchy -check -top msh_chip_top
+blackbox *sram_1r1w
+tee -o reports/elaborated.stat.txt stat -width
+tee -o reports/elaborated.stat.json stat -json
+write_rtlil checkpoints/elaborated.il

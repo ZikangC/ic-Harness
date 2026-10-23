@@ -1,0 +1,33 @@
+/** Role-scoped OMP tools; all project operations stay on the server. */
+import fs from 'node:fs';
+import {spawn} from 'node:child_process';
+export default function(pi) {
+ const context=JSON.parse(fs.readFileSync(process.env.HARNESS_RTL_CONTEXT,'utf8'));
+ const auditing=context.role==='rtl_audit';
+ const diagnosis=context.role==='readiness_diagnosis';
+ const readiness=['rtl_readiness','readiness_review','readiness_diagnosis'].includes(context.role)||context.repair_skill==='rtl-implementation-readiness';
+ const names=readiness?['rtl_remote']:(auditing?['rtl_remote','rtl_request_revision','rtl_finish_review']:['rtl_remote','rtl_revise_architecture']);
+ const actions=diagnosis?['list','read','status','jobs']:readiness?['list','read','write','replace','submit','status','cancel','jobs']:['list','read','write','replace','submit','status','cancel','evaluate','jobs','proposal'];
+ if(context.role==='rtl_readiness')actions.push('handoff');
+ const receipt={checks:[],blocked:[]};
+ const save=()=>fs.writeFileSync(process.env.HARNESS_RTL_TOOL_RECEIPT,JSON.stringify(receipt));
+ const bridge=(request,signal)=>new Promise((resolve,reject)=>{
+  const p=spawn(process.env.HARNESS_RTL_PYTHON,[process.env.HARNESS_RTL_BRIDGE],{stdio:['pipe','pipe','ignore'],env:process.env});let data='';
+  p.stdout.on('data',b=>{data+=b.toString();});p.on('error',reject);
+  p.on('close',code=>{try{const value=JSON.parse(data);resolve({content:[{type:'text',text:JSON.stringify(value)}],details:value,isError:code!==0});}catch(e){resolve({content:[{type:'text',text:'Bridge failed; no diagnostic secrets retained.'}],details:{exit_code:code},isError:true});}});
+  if(signal)signal.addEventListener('abort',()=>p.kill('SIGTERM'),{once:true});p.stdin.end(JSON.stringify(request));
+ });
+ pi.registerTool({name:names[0],label:'Remote RTL workspace',description:diagnosis?'Read-only synthesis-cost diagnosis. Only list, read, status and jobs are available. Read the controller index and select relevant evidence. Paths @input/, @architecture/, @skill/, @run/ are read-only. Read content is exact UTF-8 with byte range, eof and next_cursor; continue with same path and cursor when needed. Do not submit, cancel, modify files or use handoff. Return an ordinary final JSON report and end normally. Replies include live session_budget; reserve closing time for the report.':(readiness?'Readiness investigation and independent local evidence review. Only file and job actions are available; architecture and RTL release actions are unavailable. Run readiness experiments with --foreground and observe the outer persistent job before reading internal results. Readiness status may wait up to fifteen seconds for that same outer job, returning its existing status payload; other roles retain their existing status behavior. Replies include live session_budget; reserve its closing phase for finishing evidence and delivery. In the investigation role, handoff with the completed finalization job_id freshly verifies and commits that exact bundle and immediately ends this actor under controller control. No extra reads or final prose are needed. Missing or failed handoffs do not finish or adopt anything. ':'')+'Read/write versioned files and submit/query EDA checks on the server. Use read before edits. Read content is exact UTF-8, with byte range, truncation/eof and next_cursor. Continue with the same path and cursor until eof; a long line can span pages. Do not combine cursor with start. Actions: list,read,write,replace,submit,status,cancel,evaluate. Paths and cwd are relative to this session scope; its exact run-relative scope prefix may be supplied once. Use ./ for an explicitly local directory that resembles a run scope. Reuse returned file paths; writes return canonical path, scope and run_path. Read/list/command-path aliases @input/, @architecture/, @skill/, @run/ remain read-only. Native architecture evaluate updates the design candidate in the design role; independent architecture review evaluate writes private audit calculation evidence without editing the candidate. Proposal returns the complete candidate fingerprint. Submit uses argv with configured tool names; ordinary arguments stay literal and shell is unavailable. Large outputs stay on server; create/read a small JSON report.',parameters:{type:'object',properties:{action:{type:'string',enum:actions},path:{type:'string'},start:{type:'integer'},lines:{type:'integer'},cursor:{type:'string'},content:{type:'string'},old:{type:'string'},base_sha256:{anyOf:[{type:'string'},{type:'null'}]},argv:{type:'array',items:{type:'string'}},cwd:{type:'string'},timeout_seconds:{type:'integer'},job_id:{type:'string'}},required:['action'],additionalProperties:false},execute:async(id,params,signal)=>bridge(params,signal)});
+ if(auditing){
+  for(const [name,action,description] of [
+   ['rtl_request_revision','rtl_request_revision','Record a revise report for this candidate, then end this audit session. The caller chooses whether and which repair executor to invoke, freezes any returned candidate and starts a fresh review. Do not wait for a repair job in this session.'],
+   ['rtl_finish_review','rtl_finish_review','Publish a pass, insufficient_evidence or blocked report for the current frozen candidate. Read actual verdicts and inspect original requirements before deciding. Successful tool execution alone is not acceptance.']]){
+   pi.registerTool({name,label:name,description,parameters:{type:'object',properties:{report_path:{type:'string'}},required:['report_path'],additionalProperties:false},execute:async(id,params,signal)=>bridge({action,...params},signal)});
+  }
+ }else if(!readiness){
+  pi.registerTool({name:'rtl_revise_architecture',label:'Architecture revision',description:'Request a major architecture change supported by real implementation evidence. Optional design and review skills are called in fresh local OMP contexts. Ordinary implementation details do not need this action.',parameters:{type:'object',properties:{reason:{type:'string'},evidence:{type:'array',items:{type:'string'}},proposed_change:{type:'string'}},required:['reason','evidence','proposed_change'],additionalProperties:false},execute:async(id,params,signal)=>bridge({action:'architecture_revision',...params},signal)});
+ }
+ const activate=async()=>{await pi.setActiveTools(names);receipt.checks.push({active_tools:pi.getActiveTools()});save();};
+ pi.on('session_start',activate);pi.on('before_agent_start',activate);
+ pi.on('tool_call',async event=>{if(!names.includes(event.toolName)){receipt.blocked.push({id:event.toolCallId,name:event.toolName});save();return{block:true,reason:'Only remote RTL tools are enabled.'};}});
+}

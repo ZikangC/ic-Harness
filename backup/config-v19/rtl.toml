@@ -1,0 +1,27 @@
+# RTL has no total call or elapsed-time cap. Each submitted tool job has an explicit timeout.
+schema_version = 1
+
+# Optional bounded investigation between initial generation and independent review.
+[readiness]
+enabled = true
+after_repair = false
+# Optional full RTL review of an adopted optimization candidate. The caller routes
+# revise reports back to readiness; ordinary RTL generation uses implementation.
+rtl_review = true
+max_review_repairs = 1
+max_campaigns = 1
+max_jobs = 3
+max_job_seconds = 10
+tool_seconds = 40
+session_seconds = 240
+assistant_turns = 25
+review_seconds = 600
+review_turns = 50
+max_variants = 2
+
+# This isolated real diagnosis/optimization trial; caller execution settings only.
+diagnosis_seconds = 600
+diagnosis_turns = 40
+
+# Admit one bounded experimental campaign while leaving ample host memory.
+experiment_min_available_memory_mib = 32768

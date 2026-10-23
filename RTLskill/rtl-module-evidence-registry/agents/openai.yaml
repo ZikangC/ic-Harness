@@ -1,0 +1,6 @@
+interface:
+  display_name: "RTL Module Evidence Registry"
+  short_description: "Track current module state and immutable verification evidence"
+  default_prompt: "Use $rtl-module-evidence-registry to reconcile current RTL module state and validate the next module action."
+policy:
+  allow_implicit_invocation: true

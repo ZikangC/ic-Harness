@@ -1,0 +1,67 @@
+{
+  "native_candidate_provenance_sha256": "a5e26e78f7fa67465a92b238ff15324fb14d65891b20bea6e61dd860f575406f",
+  "closure_sha256": "6cd8e7137853241efee622acabfb664f41f3b4cf2bd47480de484c565ddbf296",
+  "closure_hash_method": "SHA256(canonical compact sorted JSON of relative file path to file SHA256)",
+  "files": {
+    "rtl/nano_leaf.sv": {
+      "type": "file",
+      "sha256": "e60a5c6334512c1e5bddcd28a546c42f8c9d3bc513a8d5c2c988150cded97df8",
+      "mode": 420
+    },
+    "rtl/nano_mem.sv": {
+      "type": "file",
+      "sha256": "ba2afad12baf7bb400cd7447fa9e3b9c6ad4a0dd7d0655a74470e3fb1594e9b6",
+      "mode": 420
+    },
+    "rtl/nano_core.sv": {
+      "type": "file",
+      "sha256": "db019c536f5d60c9b9399ead1110c6aff235e1262d76098dd974c9e5170d8423",
+      "mode": 420
+    },
+    "rtl/msh_chip_top.sv": {
+      "type": "file",
+      "sha256": "da7adc9c7469e9ee39d206f1fec9b206ebb070ad9359f6ce4329558b72dc1e7d",
+      "mode": 420
+    },
+    "rtl/nano_lut.svh": {
+      "type": "file",
+      "sha256": "4c682b0c34ff0089337af1face9daf34d13a9d974a85cae06b00ec48b8e3f301",
+      "mode": 420
+    },
+    "rtl/nano_desc.svh": {
+      "type": "file",
+      "sha256": "22562a4d7c09518745444f36ee7e019d35b7a2080047b8249c226b556fbbdd24",
+      "mode": 420
+    },
+    "rtl/nano_prog.svh": {
+      "type": "file",
+      "sha256": "baa7180ece0249abf6ad0535cec6c552756f33c21181de2682f9b99a16c68621",
+      "mode": 420
+    },
+    "rtl/nano_token.svh": {
+      "type": "file",
+      "sha256": "3aa80217160eeca2cb2f0e5a2b2628c1e26d389fcd66ac0d9fb9b132410b0ac2",
+      "mode": 420
+    },
+    "rtl/nano_exec.svh": {
+      "type": "file",
+      "sha256": "fb23a5b79fd9e0899d35cf43ba7d5c7615993dde413a495f8be2daa96855f5f1",
+      "mode": 420
+    },
+    "rtl/nano_ctrl.svh": {
+      "type": "file",
+      "sha256": "86b5c3de0c877be45f75290100d5658d34e35f4a4968db24c3525f9b4986dbf4",
+      "mode": 420
+    }
+  },
+  "compiled_sources": [
+    "rtl/nano_leaf.sv",
+    "rtl/nano_mem.sv",
+    "rtl/nano_core.sv",
+    "rtl/msh_chip_top.sv"
+  ],
+  "top": "msh_chip_top",
+  "parameters": {},
+  "review_report_sha256": "8152929cf0f61935e32751544f6b846de0fb904d1a4723267a752dc6f0b27355",
+  "scope": "All 10 synthesis input bytes and review report match the previous source-bound request. Native full work+architecture candidate digest is a provenance pin, not recomputed from this smaller closure."
+}

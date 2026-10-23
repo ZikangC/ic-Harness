@@ -1,0 +1,25 @@
+schema_version = 18
+# Execution budgets, never chip requirements. Initial design plus these revisions.
+request_timeout_seconds = 1200
+max_extraction_repairs = 2
+max_design_revisions = 3
+max_model_calls = 20
+max_stagnant_revisions = 2
+total_active_seconds = 7200
+thinking = "medium"
+
+# Maximum deterministic calculation requests per design attempt; model turns count toward total limit.
+max_design_tool_calls = 3
+
+# Restricted audit requests (recompute/lookup_source); responses bounded independently, total model/time caps shared.
+max_audit_tool_calls = 3
+
+# Source-only audit baseline repair allowance; calls share the unchanged total budget.
+max_audit_baseline_repairs = 1
+
+# Local response repairs; all provider calls still charge the shared totals above.
+max_design_format_repairs = 2
+max_audit_report_repairs = 3
+# Reserve a proposal check, one repair and report delivery; all share the total budget.
+reserved_audit_calls = 4
+reserved_audit_seconds = 1500

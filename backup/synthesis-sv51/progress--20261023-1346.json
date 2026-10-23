@@ -1,0 +1,44 @@
+{
+  "observed_utc": "2026-10-23T05:46:33.608998+00:00",
+  "observed_local": "2026-10-23 13:46:33 Asia/Shanghai",
+  "job_id": "synth--20261023-v19-candidate3-sv51--synthesis-01",
+  "state": "running",
+  "phase": "02_coarse",
+  "substage": "PROC_MUX",
+  "phase_started_utc": "2026-10-23T03:16:25.707451+00:00",
+  "phase_elapsed_seconds": 9005.168380324962,
+  "completed_phases": [
+    {
+      "phase": "01_elaborate",
+      "exit_code": 0,
+      "elapsed_seconds": 625.3879137419863
+    }
+  ],
+  "yosys": {
+    "pid": 245,
+    "start_ticks": "58194675",
+    "boot_id": "b89660a4-417a-44e6-913c-9167ec87d67d",
+    "state": "R",
+    "cpu_seconds": 8988.84,
+    "rss_kib": 3795504
+  },
+  "current_log": {
+    "path": "logs/02_coarse.yosys.log",
+    "bytes": 196012,
+    "mtime_utc": "2026-10-23T05:46:18.008399+00:00",
+    "current_process_counter": 2407,
+    "current_process_signal_count": 41679,
+    "counter_scope": "One process within PROC_MUX, not overall synthesis progress"
+  },
+  "comparison_to_1130": {
+    "log_bytes_before": 19884,
+    "counter_before": 184,
+    "cpu_seconds_before": 846.76,
+    "interpretation": "Log content and processing counter advanced; stage remains incomplete."
+  },
+  "memory_available_kib": 509793896,
+  "active_eda_count": 1,
+  "new_completed_phase": false,
+  "mapped_area_available": false,
+  "sta_available": false
+}

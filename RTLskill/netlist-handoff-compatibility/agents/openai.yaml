@@ -1,0 +1,4 @@
+interface:
+  display_name: "网表交接兼容性"
+  short_description: "验证综合网表能否被后端工具读取并链接"
+  default_prompt: "Use $netlist-handoff-compatibility to audit this synthesized-netlist handoff before STA or implementation."

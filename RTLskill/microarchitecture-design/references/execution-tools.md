@@ -1,0 +1,74 @@
+# Finite operand-supply witnesses
+
+`schedule_windows` is optional evidence for a concrete physical-word, operand-readiness or issue question. It checks submitted declarations against the input's storage capabilities. Coarse resource/service estimates with an explained utilization or conservative schedule remain valid architecture evidence without expanded windows. The result is finite resource evidence, not a cycle-accurate full-chip schedule or a proof of source interpretation.
+
+For service outside this model use `{id,model:"unsupported",reason,basis}`. That path stays unknown without claiming hardware impossibility. Register-only windows are supported with empty `reads`/`writes`, actual priced register buffers and `local_uses`.
+
+A supported row is `{id,workload,cycles,repetition_basis,basis,reads:[],writes:[],uses:[],issues:[],local_uses?:[]}`. All indices are zero-based; numeric fields accept the calculator's safe arithmetic expressions unless explicitly listed as lane indices.
+
+- Physical requests: `{id,storage_reference,instance,word_address,cycle}`. The reference names an actual macro. Each request transfers one physical word and counts against the source-defined ports of that instance in that cycle. Width and synchronous read latency come from the actual macro and input capabilities. Missing capabilities stay unknown; ROM writes with zero write ports fail.
+- Physical operand uses: `{cost_group,read_id,cycle,lane,operand,bit_offset,width,holding?:{buffer,bit_offset,width}}`. The group must be a compute group of this workload. Multiple slices or broadcasts may share a single read. Slices must fit the word and uses cannot precede readiness. A later use names the exact word slice captured at readiness and a real register buffer large enough for it. Keeping only a slice of a wider word is legal. Simultaneous occupancy and achievable capture/overwrite lifetimes still need storage and audit evidence.
+- Local uses: `{cost_group,kind:"register"|"feedback",buffer,cycle,lane,operand,width,bit_offset,ready_cycle,basis,producer_basis,feedback_basis?}`. The actual register buffer must be in the storage and area ledgers; `producer_basis` identifies what value is retained or produced, the producer/iteration, and why the declared ready cycle applies. Feedback also needs `feedback_basis` explaining the recurrence and which old value is consumed before overwrite. Bounds and readiness are checked. Producer semantics and the truth of a declared readiness remain independent review obligations. Physical and local sources cannot fill the same cycle/lane/operand position twice.
+- Issues: `{cost_group,cycle,lanes:[actual integer indices],operands:[required role names],basis,partial_issue_basis?}`. List every active lane and role for that concrete issue. Every position must have a physical or local use. Missing roles or lanes that were explicitly declared fail. A partial lane set remains unverified for full issue, even when its stated partial issue is valid; explain its purpose with `partial_issue_basis`. A MAC issue needs at least two input roles. Role meanings and whether more inputs are required must be audited against the actual operation.
+
+Issue completeness describes the submitted witness. Omitted issues retain physical-access-only evidence; partial or absent full-lane coverage remains an evidence gap, not a universal delivery prerequisite or proof of insufficient hardware. Do not claim a partial witness establishes an unrepresented full issue. Actual declared missing operand positions or port/readiness contradictions still fail their checks. An issue has at most 65,536 explicit operand positions; a window has at most 4,096 issues. Larger evidence stays outside this bounded checker.
+
+For example, one hypothetical 16-bit word may hold two 8-bit coefficients. A latency-one read at cycle zero can provide both slices at cycle one. A retained 8-bit input may be broadcast from one priced register to both lanes, giving an issue with lanes `[0,1]` and roles `["coefficient","input"]`. A trace supplying only one role or one lane cannot establish both lanes' MAC throughput. Two reads in the same cycle still conflict on a source-defined single-read-port instance, irrespective of average traffic.
+
+`cycles` is the finite window duration. `repetition_basis` explains the scope represented and any assumptions used to extrapolate it; name omitted fill/drain, tails or arbitration instead of presenting them as checked. If charging a whole task from the witness, account for those costs or an explicit conservative bound. Full repeated/tail control can remain RTL work when it does not invalidate the budget or state semantics. Packed words, broadcast, holding and fusion are legal when they preserve values and dependencies. The program does not prove the extrapolation or full-task schedule merely because a finite issue passes.
+
+The ledger normalizes physical and local supply into `uses` with `supply_kind`, and reports each issue's status plus complete/missing cost-group coverage. A passing finite issue does not upgrade unresolved numeric, timing, area, algorithm or interface evidence.
+
+## Executable compact rules
+
+Use optional `candidate.execution_templates` when expanding a chosen path would clarify a material design question without a large handwritten table. This uses the same physical checker, with loops expanded by the program. The tool does not select hardware, identify Python operations, infer causal dependencies, or prove that a source path was fully described. A typical issue is useful within its stated scope; do not present it as a complete unrepresented path.
+
+A template is:
+
+```json
+{
+  "id": "path", "workload": "profile_id",
+  "parameters": {"elements": "source_fact_id", "parallel": "chosen_lanes"},
+  "basis": "what complete source path and physical representation this models",
+  "repetition_basis": "source work per representative path; task repetition is separately derived",
+  "retentions": [],
+  "phases": [
+    {"id": "body", "cycles": 2, "repeat": "ceil(elements/parallel)",
+     "cost_groups": ["actual_compute_group"],
+     "basis": "one synchronous read then one issue, with a partial last block",
+     "reads": [{"id": "word", "storage_reference": "actual_macro", "instance": 0,
+                "word_address": "iteration", "cycle": 0}],
+     "uses": [{"for_each": [{"index": "lane", "count": "min(parallel,elements-iteration*parallel)"}],
+               "cost_group": "actual_compute_group", "read_id": "word", "cycle": 1,
+               "lane": "lane", "operand": "coefficient", "bit_offset": "lane*element_bits",
+               "width": "element_bits"}],
+     "local_uses": [], "writes": [], "issues": [], "retentions": [], "dependencies": []}
+  ]
+}
+```
+
+This excerpt demonstrates expansion syntax; it is not a complete MAC witness. To claim a complete MAC path, also supply its actual input/accumulator roles, producer dependencies and associated costs. The architecture draft may instead use this as a partial witness with separately justified service/utilization and overhead assumptions.
+
+- Phases execute serially. `cycles` is the chosen body duration, including explicit fill, wait, reduction, writeback and drain time. `repeat` defaults to one. The program computes phase duration as `cycles*repeat` and template duration as the sum of phase durations. Each repeated body has the same charged duration, including a partial final body; unused tail lanes do not imply full occupancy or shorten the charge. A different tail duration can be a separate explicit phase. It rejects any event outside its body. It does not infer a missing latency or charge an undeclared phase for the designer.
+- `parameters` are fresh arithmetic identifiers evaluated in declaration order from source facts and candidate choices. They cannot shadow either. The phase automatically provides zero-based `iteration`; a repeated phase is fully expanded for its in-path iterations. Numeric fields use safe arithmetic, including `min`, `max`, `ceil`, floor division and modulo. No Python code, conditionals, indexing or arbitrary function calls execute.
+- Every row in `reads`, `writes`, `uses`, `local_uses`, `issues`, `retentions`, or `dependencies` may use `for_each:[{index,count,start?:0,step?:1}]`. Counts may depend on preceding loop indices. `start` is nonnegative and `step` positive. Loop indices cannot shadow an existing name. `${index}` interpolates an index into an ID or explanatory string; numeric fields use the bare index expression.
+- Issue `lanes` may be a literal list or `{count,start?:0,step?:1}`. Use `min()` to express an actual partial tail rather than pretending an incomplete word has valid values in every lane. Every declared lane/role still needs a corresponding expanded use. One active lane in an issue counts as one operation of that group's declared unit; multi-operation instructions must be split into independently accountable groups or stay unsupported.
+- Request and issue IDs are namespaced as `<template>/<phase>/<iteration>/<id>`; `read_id` and dependency IDs within a body resolve in that same namespace. The generated finite window ID is exactly the template ID. Raw `schedule_windows` must not reuse it.
+
+### Register values and old-value retention
+
+Template local uses must reference an explicit retention, rather than asserting an unchecked `ready_cycle`. A phase retention is `{id,buffer,bit_offset,width,start,end,basis,producer_basis? ,read_id?,source_bit_offset?}`. `start` and `end` are inclusive cycles within the body, shifted to the generated global timeline. The buffer must be an actual register allocation covered by the ordinary storage and area ledgers. A read capture names `read_id` and cannot start before actual input read readiness; its captured slice must fit the physical word. A capture later than readiness leaves the evidence unknown: source-backed output stability or an explicit intermediate retention must cover the gap. The current storage capability model does not establish read-output holding, so this is not classified as hardware failure, even if no intervening read is listed. Register bits used for another value during that gap do not turn the missing source stability into a pass. A non-read value needs `producer_basis` explaining the actual producer, recurrence and latency; the truth of that explanation still needs independent audit.
+
+A template local use is an ordinary local use with `retention` replacing `buffer` and `ready_cycle`. Its `bit_offset` is relative to that retained value. The program supplies the actual buffer offset and readiness, checks that the value is alive at every use, and rejects overlapping live values in the same physical register bits. To retain a physical read after its ready cycle, give that physical use `retention`; manual `holding` is not accepted in templates. The captured source slice and register allocation are then checked together.
+
+A template-level `retentions` array can describe values spanning multiple phases using global template cycles. Refer to these from a phase with `retention:"/value_id"`. Phase-local values use `retention:"value_id"`. Template-level read captures use the complete relative ID, for example `read_id:"load/0/input"`. Inclusive lifetimes conservatively require distinct slots when an old value is consumed and replaced on the same cycle; schedule the replacement later or allocate another slot. Do not claim a capacity failure for a design that could choose a different legal slot or schedule.
+
+Declare actual ordered events with `dependencies:[{before:"producer_event_id",after:"consumer_event_id",min_latency:1,basis:"source dependence and pipeline latency"}]`. References must resolve to read, write or issue events with IDs; the program checks their expanded cycle separation. An unprefixed reference resolves in the current phase iteration. A leading slash uses a template-relative absolute event ID, for example `before:"/gate/0/nonlinear"` and `after:"state_issue"`, to connect a prior nonlinear phase to the state consumer. Interpolation happens first, so `before:"/state/${previous}/write"` can name an explicitly calculated previous iteration; define `previous` through an enclosing loop index rather than embedding an expression inside `${...}`. This does not establish that the declared dependency is the correct one from the reference. Independent audit must reconstruct old-state consumers and nonlinear boundaries from source, rather than accept a self-reported DAG. Same-address read/write in one cycle is rejected because the checker has no source-defined read-during-write value contract; use separate cycles for this supported model.
+
+### Duration, storage and budget results
+
+`execution_derivation.templates` returns each template's `cycles`, stable `window_id`, and `components` (one per phase) with `{id,cycles,body_cycles,iterations,cost_groups,first_cycle,end_cycle,window_id,issued_operations}`. It also returns whole-template `issued_operations`, expanded event count, actual physical read/write counts and `peak_buffer_bits`. Each operation map is computed from expanded active lanes; it is not another model-entered total. Peak bits are simultaneous live retained values, checked against their actual allocated slices. These values complement ordinary object/storage coverage; they do not prove that unlisted temporaries do not exist.
+
+When using a template for budget charging, its declared duration and extrapolation need a defensible cost basis for the mapped work. Whole-task repetition is derived from the original complete-task work counts and issued-operation counts; multiple covered compute groups must imply the same positive integer repetition. This arithmetic relation does not establish semantic scope or cover omitted costs. Never multiply a complete-task count by tokens again. A cycles-only path such as a loader needs an explicit source-grounded repetition. Use workload `composition:"execution"` to charge the selected template/phase once with its exact cost-group references; do not also charge those groups as ordinary components. A template used only as evidence need not price every phase. See the budget-tool contract for this optional composition.
+
+The calculator allows up to 256 phases, 65,536 repetitions or members per loop, eight nested loops, 200,000 expanded rows, 4,096 retained values and the existing finite-issue bounds. Exceeding these is a tool-size limitation, not proof that the hardware is infeasible. Split a complete path into auditable disjoint components or mark the unsupported evidence honestly. An input capability that is absent remains unknown. Counts, body duration, source-to-value meaning, and the correctness of extrapolating the representative path across task boundaries remain independent review obligations.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "RTL Implementation Readiness"
+  short_description: "Probe RTL synthesis cost and compare verified candidates"
+  default_prompt: "Use $rtl-implementation-readiness to investigate RTL synthesis-cost risks, run bounded experiments, and deliver source-bound evidence and candidate patches."

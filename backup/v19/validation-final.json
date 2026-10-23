@@ -1,0 +1,22 @@
+{
+  "checked_utc": "2026-10-22T11:51:05.008499+00:00",
+  "status": {
+    "status": "rtl_review_finished",
+    "phase": "audit",
+    "adopted": true,
+    "decision": "candidate_for_integration",
+    "rtl_stage_release": true
+  },
+  "report_scope": "scoped cost optimization + binary function proof + independent engineering accept + controlled isolated adoption + delivery audit; no full-chip RTL/PPA acceptance",
+  "reference_count": 7,
+  "all_reference_checks_passed": true,
+  "actor_source_pins_passed": true,
+  "original_input_pins_passed": true,
+  "isolated_change_matches_adoption": true,
+  "local_protection": true,
+  "server_protection": true,
+  "old_synthesis_same_process": true,
+  "pending_jobs": 0,
+  "report_sha256": "515d6cb72d624c13fdbd29451e82049c6a5df32f14def18d24fdb7321fa12ca9",
+  "corrected_summary_sha256": "50d9135773ea9ba22d94fa93f4be8466861d94d23552a5fefce22adc4e84004d"
+}

@@ -1,0 +1,6 @@
+interface:
+  display_name: "RTL STA Scope"
+  short_description: "Select the minimum defensible RTL timing scope"
+  default_prompt: "Use $rtl-sta-scope to determine the minimum STA scope invalidated by this RTL change."
+policy:
+  allow_implicit_invocation: true

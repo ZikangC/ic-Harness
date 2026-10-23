@@ -1,0 +1,37 @@
+{
+  "created_utc": "2026-10-23T06:40:15.441895+00:00",
+  "version": "validated-v19-before-regional-restructuring",
+  "harness_source": "/Users/chenzikang/Documents/ChatGPT/Harness搭建/output/readiness-integration--20261022/v19/project/harness",
+  "standalone_library_source": "/Users/chenzikang/code/work/RTLskill",
+  "standalone_replacements_from_v19": [
+    "microarchitecture-design",
+    "microarchitecture-audit",
+    "rtl-implementation",
+    "rtl-audit",
+    "rtl-implementation-readiness"
+  ],
+  "native_candidate_provenance_sha256": "a5e26e78f7fa67465a92b238ff15324fb14d65891b20bea6e61dd860f575406f",
+  "rtl_closure_sha256": "6cd8e7137853241efee622acabfb664f41f3b4cf2bd47480de484c565ddbf296",
+  "region_restructuring_implemented": false,
+  "existing_github_remote": "git@github.com:ZikangC/ic-Harness.git",
+  "requested_github_remote": "git@github.com:ZikangC/ic-Harness.git",
+  "github_read_checks": {
+    "ic-Harness": {
+      "accessible": true,
+      "head": "2f4c660bc36fa6042fa94253175c45c812cf53d5",
+      "default_branch": "codex/baseline"
+    },
+    "ic_harness": {
+      "accessible": false,
+      "result": "Repository not found; absent or current SSH identity lacks access",
+      "selected": false
+    }
+  },
+  "scope": "Reusable code, active skills, tests, inputs, exact small RTL example and historical summaries. No EDA results, checkpoints, libraries, model sessions or credentials.",
+  "config_changes": {
+    "harness/config/environment.toml": "Packaged current-server profile; project_name empty uses clone directory name. Exact v19 profile retained under backup/config-v19.",
+    "harness/config/rtl.toml": "Production stage default instead of v19 metadata-only closing budget; exact v19 profile retained under backup/config-v19.",
+    "harness/config/README.md": "Backup-specific configuration explanation replaces stale historical connectivity claims."
+  },
+  "target_confirmed_by_user": "ic-Harness"
+}

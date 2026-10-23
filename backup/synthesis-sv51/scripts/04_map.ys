@@ -1,0 +1,11 @@
+read_rtlil checkpoints/generic.il
+dfflibmap -liberty input/NangateOpenCellLibrary_typical.lib
+abc -fast -liberty input/NangateOpenCellLibrary_typical.lib
+clean
+read_liberty -lib input/NangateOpenCellLibrary_typical.lib
+hierarchy -check -top msh_chip_top
+check -mapped -assert
+tee -o reports/mapped.stat.txt stat -liberty input/NangateOpenCellLibrary_typical.lib
+tee -o reports/mapped.stat.json stat -json -liberty input/NangateOpenCellLibrary_typical.lib
+write_verilog -noattr -noexpr mapped.v
+write_rtlil checkpoints/mapped.il

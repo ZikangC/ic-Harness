@@ -1,0 +1,4 @@
+interface:
+  display_name: "当前阶段证据整合"
+  short_description: "整合当前 RTL/EDA 阶段证据与相关 Skill 输出，不导入历史规则"
+  default_prompt: "Use $stage-evidence-workflow to consolidate and validate one focused pipeline stage from current-run artifacts and explicitly scoped Skill outputs only."

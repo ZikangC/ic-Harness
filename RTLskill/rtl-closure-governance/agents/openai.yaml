@@ -1,0 +1,3 @@
+interface:
+  display_name: "RTL 闭合治理"
+  short_description: "以证据门控 RTL 综合与顶层 STA 闭合"

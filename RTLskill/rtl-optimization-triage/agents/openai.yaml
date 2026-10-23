@@ -1,0 +1,6 @@
+interface:
+  display_name: "RTL Optimization Triage"
+  short_description: "Run bounded evidence-backed RTL optimization campaigns"
+  default_prompt: "Use $rtl-optimization-triage to auto-rank eligible RTL candidates, run one recoverable single-file edit, require functional/STA and comparable PPA improvement, then resume the Registry-owned mainline."
+policy:
+  allow_implicit_invocation: true

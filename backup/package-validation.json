@@ -1,0 +1,43 @@
+{
+  "skill_hashes_verified": 52,
+  "matching_standalone_skills": 5,
+  "unchanged_v19_runtime_except_documented_config": true,
+  "python_ast_files": 232,
+  "credential_patterns_found": [],
+  "commands": [
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "harness/run.py",
+        "--help"
+      ],
+      "exit_code": 0,
+      "output": "usage: run.py [-h] [--config CONFIG] [--run-id RUN_ID] [--resume RESUME]"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "RTLskill/rtl-implementation-readiness/scripts/readiness.py",
+        "--help"
+      ],
+      "exit_code": 0,
+      "output": "usage: readiness.py [-h]"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "harness/tools/check_environment.py",
+        "--resolve-only"
+      ],
+      "exit_code": 0,
+      "output": "{\n  \"project_root\": \"/Users/chenzikang/Documents/ChatGPT/Harness搭建/output/github-backup--20261023-v19/package\",\n  \"remote_project\": \"/home/czk/workspace/package\",\n  \"container_project\": \"/work/package\",\n  \"container\": \"eda\",\n  \"models\": {\n    \"architecture\": \"deepseek-v4-pro-202606\",\n    \"implementation\": \"deepseek-v4-flash-202605\",\n    \"review\": \"deepseek-v4-pro-202606\",\n    \"evidence\": \"deepseek-v4-flash-202605\"\n  },\n  \"checks\": {},\n  \"ok\": true,\n  \"scope\": \"config_only\"\n}\n"
+    }
+  ],
+  "files": 383,
+  "bytes": 4835893,
+  "largest_bytes": 125484,
+  "scope": "Offline packaging validation only; no model or EDA run, no Git commit/push"
+}
