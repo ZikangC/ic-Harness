@@ -99,7 +99,7 @@ class FormalRepairSeedImport(unittest.TestCase):
         self.formal_seed()
         review = self.transition('rtl_review_begin')
         report = self.out / review['audit_scope'] / 'review.json'
-        report.write_text(json.dumps({'verdict': 'revise', 'candidate_sha256': review['candidate_sha256'],
+        report.write_text(json.dumps({'verdict': 'revise', 'review_scope': review['review_scope'], 'candidate_sha256': review['candidate_sha256'],
                                       'reason': 'Synthetic review finding; no hardware pass claimed.', 'evidence': []}))
         review = self.transition('rtl_review_decision', review=review['review'],
                                  report_path='review.json', expected_verdict='revise')

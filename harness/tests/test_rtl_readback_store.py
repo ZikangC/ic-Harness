@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from harness.runtime import rtl_worker as worker
@@ -94,9 +95,13 @@ class ReadbackStoreTests(unittest.TestCase):
         self.dump(job / 'metadata-fixture-only.json', {'schema': 'synthetic-protocol-metadata-only/v1', 'not_launched': True, 'no_host_launch_or_container': True})
         self.dump(job / 'request.json', {'metadata_fixture_only': True, 'scope': review['audit_scope'], 'candidate_sha256': review['candidate_sha256']})
         self.dump(job / 'result.json', {'metadata_fixture_only': True, 'candidate_sha256': review['candidate_sha256'], 'exit_code': 0, 'timed_out': False})
-        self.dump(report_path, {'verdict': 'pass', 'candidate_sha256': review['candidate_sha256'], 'reason': 'Synthetic release-guard binding check only.', 'evidence': ['1']})
+        self.dump(report_path, {'verdict': 'pass', 'review_scope': review['review_scope'], 'candidate_sha256': review['candidate_sha256'], 'reason': 'Synthetic release-guard binding check only.', 'evidence': ['1']})
         if expected:
-            return self.call(action='rtl_review_decision', review=review['review'], report_path=str(report_path.relative_to(self.out)), expected_verdict='final')
+            # Isolate this synthetic readback protocol test from the separately
+            # tested native structure gate. These metadata-only receipts are not
+            # claimed as structure/RTL evidence or an integrated release test.
+            with patch.object(worker.rtl_structure_gate, 'validate_release', return_value={'fixture_scope': 'readback_protocol_only'}):
+                return self.call(action='rtl_review_decision', review=review['review'], report_path=str(report_path.relative_to(self.out)), expected_verdict='final')
         with self.assertRaisesRegex(ValueError, 'complete original parent readback'):
             self.call(action='rtl_review_decision', review=review['review'], report_path=str(report_path.relative_to(self.out)), expected_verdict='final')
 

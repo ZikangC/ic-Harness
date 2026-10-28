@@ -1,17 +1,25 @@
-# 备份版本的运行配置
+# Harness 运行环境
 
-代码来自已验证的 v19 隔离快照。精确的原试验配置保存在 `../../backup/config-v19/`，其中 `rtl.toml` 是交付收尾的 3 作业 / 40 秒配置，不能当作一轮新优化的通用预算。
+`environment.toml` 保存 SSH、Docker、工具和 Liberty 的运行配置；`models.toml` 保存 OMP 调用模板及模型角色。微架构阶段使用 controller、独立设计/审计 skill 与确定性检查，唯一入口为 `python3 harness/run.py architecture`，详见 `../ARCHITECTURE.md`。环境检查仍是只读工具。
 
-当前 `environment.toml` 示例指向 `czk@100.85.224.17`、Docker `eda`，宿主工作区 `/home/czk/workspace` 挂载到容器 `/work`。`project_name` 为空时使用本地项目目录名。运行前按实际部署名称设置它；配置检查不会创建或同步服务器项目。
+项目根目录从配置文件位置解析。复制整个 `harness/` 到另一个项目后，默认使用新项目目录名组成远程路径；如需其他名称，在 `remote.project_name` 中明确设置。检查不会创建远程项目或同步源码。
 
-默认 `rtl.toml` 使用原生产阶段默认值，不自动启用 readiness。为新实验配置 `[readiness]` 的预算、模式和审阅选项时，参考 `../docs/readiness-integration.md`、`../docs/readiness-diagnosis.md`。不要复用已完成试验的 run_id、工作目录或作业身份。
+当前环境是 `txjg7-2@100.118.125.71`，容器 `k3demo-eda`。宿主目录 `/home/txjg7-2/ic-project` 挂载到容器 `/work`，因此本项目对应宿主 `/home/txjg7-2/ic-project/harness_final`、容器 `/work/harness_final`，这两个项目目录尚未创建。
 
-`models.toml` 保留验证时的角色与 OMP 模板。OMP 的 provider、认证和实际模型可用性由使用者自己的 `~/.omp/agent/models.yml` 管理；本包没有复制该文件或密钥。`architecture.toml` 是调用预算设置，芯片约束来自 `input/spec.md`。
-
-仅解析配置、不连接服务器或调用模型：
+从项目根目录执行：
 
 ```bash
-python3 -B harness/tools/check_environment.py --resolve-only
+python3 harness/tools/check_environment.py --resolve-only
+python3 harness/tools/check_environment.py
+python3 harness/tools/check_environment.py --models
 ```
 
-如需真正检查环境，再运行不带 `--resolve-only` 的命令；只有显式添加 `--models` 才会进行模型探测。历史 `connectivity.json` 未打包。
+无 `--models` 时不会调用付费模型；`--models` 每个不同模型仅发送一次最小探测请求，禁用工具、扩展和项目规则，不保存模型会话。命令只读检查环境，不运行仿真或综合。
+
+OMP 通过用户现有 `~/.omp/agent/models.yml` 解析 provider 和凭据。harness 不复制密钥；迁到其他机器时仍需配置 SSH、Docker、OMP 和认证。`models.toml` 中 provider 元数据是当前环境说明，修改这些字段本身不会重写 OMP 的 provider 配置。
+
+2026 年 10 月 10 日重新检查：SSH、k3demo-eda、Python、Verilator、Yosys、OpenROAD、Liberty、STA 和两个配置模型的最小调用均通过。`connectivity.json` 是前一天的历史记录，不能代表当前权限。
+
+芯片目标频率、面积、吞吐及存储预算属于 `input/spec`。本环境配置没有继承旧项目的硬件预算，也没有设置旧项目的远程执行目录。
+
+architecture.toml 的局部格式修复上限和 reserved_audit_calls/seconds 均在 max_model_calls/total_active_seconds 总上限内工作；不增加总额度，不保证审阅完成，也不是芯片预算。设计调用触及保留额度会停止并保存证据。

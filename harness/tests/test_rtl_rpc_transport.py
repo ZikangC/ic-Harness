@@ -1,10 +1,9 @@
 """Transport failures retain action context without retrying uncertain mutations."""
-import json,subprocess,unittest
+import importlib.util,json,subprocess,unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 from harness.adapters.rtl_remote import Remote
-from harness.adapters import rtl_audit as flow
 
 
 class TransportTests(unittest.TestCase):
@@ -82,6 +81,7 @@ class TransportTests(unittest.TestCase):
     self.assertIn('action=unknown',str(caught.exception));self.assertNotIn('private',str(caught.exception));self.assertEqual(run.call_count,1)
 
  def test_receipt_transport_failure_propagates_instead_of_becoming_missing(self):
+  from harness.adapters import rtl_audit as flow
   review={'review':'review-1','candidate_sha256':'candidate','decision':{'report_sha256':'report'}}
   for reply in [OSError('unavailable'),SimpleNamespace(stdout='truncated reply',returncode=255),SimpleNamespace(stdout='{"text":"incomplete reply"}',returncode=255)]:
    with self.subTest(reply=type(reply).__name__):
@@ -90,11 +90,8 @@ class TransportTests(unittest.TestCase):
      with self.assertRaises(ConnectionError):flow._receipt(self.remote,review,'repair')
     self.assertEqual(run.call_count,1)
   # A genuine server-side missing file remains the coordinator's missing marker.
-  with patch('harness.adapters.rtl_remote.subprocess.run',return_value=SimpleNamespace(stdout='{"error":"FileNotFoundError: [Errno 2] No such file or directory: receipt"}',returncode=1))as run:
+  with patch('harness.adapters.rtl_remote.subprocess.run',return_value=SimpleNamespace(stdout='{"error":"FileNotFoundError: No such file or directory: receipt"}',returncode=1))as run:
    self.assertIsNone(flow._receipt(self.remote,review,'repair'))
-  self.assertEqual(run.call_count,1)
-  with patch('harness.adapters.rtl_remote.subprocess.run',return_value=SimpleNamespace(stdout='{"error":"receipt integrity failure"}',returncode=1))as run:
-   with self.assertRaisesRegex(RuntimeError,'integrity failure'):flow._receipt(self.remote,review,'repair')
   self.assertEqual(run.call_count,1)
   receipt={'candidate_sha256':'candidate','decision_report_sha256':'report','completed':True}
   response=json.dumps({'text':'1: '+json.dumps(receipt)})

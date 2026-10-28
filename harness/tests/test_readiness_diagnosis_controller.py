@@ -146,13 +146,14 @@ class DiagnosisAdapterTests(unittest.TestCase):
 
 class DiagnosisEntryTests(unittest.TestCase):
     def run_controller(self, *, allow=False, diagnose_only=False, advice='small_experiment', admitted=False,
-                       completed=True, adopted=False, formal=False, resume_phase=None):
+                       completed=True, adopted=False, formal=False, resume_phase=None, review_scope=None):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name); config = root / 'harness/config'; config.mkdir(parents=True)
             (config / 'environment.toml').write_text('[project]\nroot="../.."\ninput_dir="input"\n'
                 '[remote]\nssh_host="fixture"\n[eda]\npython="/fixture/python"\nverilator="/fixture/verilator"\n'
                 'yosys="/fixture/yosys"\nopenroad="/fixture/openroad"\n')
-            (config / 'rtl.toml').write_text('[readiness]\nenabled=true\nrtl_review=' + str(formal).lower() + '\n')
+            (config / 'rtl.toml').write_text('[readiness]\nenabled=true\nrtl_review=' + str(formal).lower() + '\n' +
+                (f'review_scope="{review_scope}"\n' if review_scope is not None else ''))
             (config / 'models.toml').write_text('schema_version=1\n')
             provenance = root / 'provenance.json'; provenance.write_text('{"candidate_sha256":"frozen-candidate"}')
             index = root / 'index.json'; index.write_text('{"artifacts":[{"name":"log","path":"/server/existing.log"}]}')
@@ -192,13 +193,20 @@ class DiagnosisEntryTests(unittest.TestCase):
                 self.assertEqual(context['diagnosis_report_path'], 'diagnosis/observation-1/report.json')
                 self.assertTrue([call['value'] for call in calls if call['action'] == 'set_status'][-1]['phase'] == 'readiness')
                 return {'status': 'rtl_readiness_completed', 'adopted': adopted}
+            def review(context, remote, **options):
+                scope = review_scope or 'change'
+                self.assertEqual(options['review_scope'], scope)
+                self.assertIs(options['repair_handler'], rtl.readiness_repair)
+                self.assertEqual(options['max_repairs'], 1)
+                return {'status': 'rtl_review_finished', 'review_verdict': 'pass',
+                        'review_scope': scope, 'rtl_stage_release': scope == 'candidate'}
             with patch.object(rtl, 'validate_skills'), patch.object(rtl, 'load_input_bundle', return_value=(
                     {'spec.md': 'fixture', 'reference.py': 'pass'}, {}, {'source_paths': {}})), \
                     patch.object(rtl, 'Remote', Remote), patch.object(rtl, 'run_session') as generation, \
                     patch.object(rtl, 'run_diagnosis', side_effect=inspect) as diagnostic, \
                     patch.object(rtl, 'run_readiness', side_effect=optimize) as experiment, \
-                    patch.object(rtl, 'run_audit', return_value={'status': 'rtl_review_finished',
-                        'rtl_stage_release': True}) as audit, patch.object(rtl.signal, 'signal'), patch('builtins.print'):
+                    patch.object(rtl, 'run_audit', side_effect=review) as audit, \
+                    patch.object(rtl.signal, 'signal'), patch('builtins.print'):
                 code = entry.run(args)
             generation.assert_not_called()
             final = [call['value'] for call in calls if call['action'] == 'set_status'][-1]
@@ -227,6 +235,14 @@ class DiagnosisEntryTests(unittest.TestCase):
             allow=True, admitted=True, adopted=True, formal=True)
         self.assertEqual((code, diagnostics, experiments, reviews), (0, 1, 1, 1))
         self.assertEqual(final['phase'], 'audit')
+        self.assertFalse(final['rtl_stage_release'])
+        self.assertEqual(final['review_scope'], 'change')
+
+    def test_admitted_candidate_can_explicitly_request_whole_candidate_review(self):
+        code, diagnostics, experiments, reviews, _, final = self.run_controller(
+            allow=True, admitted=True, adopted=True, formal=True, review_scope='candidate')
+        self.assertEqual((code, diagnostics, experiments, reviews), (0, 1, 1, 1))
+        self.assertEqual(final['review_scope'], 'candidate')
         self.assertTrue(final['rtl_stage_release'])
 
     def test_incomplete_diagnosis_is_not_success_and_mode_flags_cannot_bypass_read_only(self):
@@ -241,7 +257,8 @@ class DiagnosisEntryTests(unittest.TestCase):
             allow=True, admitted=False, formal=True, resume_phase='audit')
         self.assertEqual((code, diagnostics, experiments, reviews), (0, 0, 0, 1))
         self.assertEqual(final['phase'], 'audit')
-        self.assertTrue(final['rtl_stage_release'])
+        self.assertFalse(final['rtl_stage_release'])
+        self.assertEqual(final['review_scope'], 'change')
         self.assertEqual(final['experiment_admission']['reservation_id'], 'existing-reservation')
         self.assertEqual([call for call in calls if call['action'] == 'rtl_readiness_seed'],
                          [{'action': 'rtl_readiness_seed', 'validate_only': True}])

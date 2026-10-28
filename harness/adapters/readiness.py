@@ -83,8 +83,43 @@ def _context_text(context, campaign):
         values['diagnosis_report_path'] = '@run/' + values['diagnosis_report_path']
     return json.dumps(values
                       | {'campaign': campaign, 'baseline_project_root': _baseline_project_root(context, campaign),
-                         'source_path_base': 'original RTL paths are rtl/... without a work/ prefix; direct baseline root or a campaign staging root preserving original paths/SHA; explicitly restrict --allow-edit to original RTL'},
+                         'source_path_base': 'original RTL paths are rtl/... without a work/ prefix; direct baseline root or a campaign staging root preserving original paths/SHA; --allow-edit names existing owned RTL, regional additions/filelists require explicit campaign policy'},
                       ensure_ascii=False, indent=2)
+
+
+def _source_contract(campaign):
+    common = ('SOURCE PATH CONTRACT: the default readiness.py init --project is the absolute '
+              'baseline_project_root from SERVER CONTEXT. A staging project within campaign work is '
+              'also allowed: copy original RTL and declared build files with the same relative paths '
+              'and identical baseline SHA values, and add necessary frozen probe wrappers/test assets. '
+              'Declare --source, --include, --asset and --allow-edit paths relative to that project root. '
+              'New wrappers may be frozen --source inputs; tests may be --asset inputs. Neither may '
+              'appear in integration allowed edit paths. Original RTL paths must retain rtl/...; '
+              'do not prefix them with work/ or root the integration workspace at the parent run directory. ')
+    if campaign.get('region_roots'):
+        return (common + 'REGIONAL RESTRUCTURING IS ENABLED by the explicit campaign policy. '
+                'Work around a hardware responsibility boundary; you may introduce datapath modules, '
+                'change their callers, consolidate writeback, or separate execution state from scheduling. '
+                'Use init --region-root for each campaign region_roots entry and --build-file for each '
+                'campaign build_files entry, with exactly those policy paths. Explicitly --allow-edit '
+                'existing owned RTL that may be modified/deleted. New RTL is permitted only beneath '
+                'region_roots; frozen sources, probe assets, requirements, architecture and tests remain immutable. '
+                'A variant is one complete candidate: overlay contains additions/modifications including '
+                'declared filelist changes, --delete records owned RTL removals, and --build points to JSON '
+                '{top,sources,include_dirs} describing its actual ordered build. First-version filelists '
+                'are plain root-relative source paths, blanks/#comments only; tool flags and nested lists '
+                'are unsupported. Keep the same top and preserve architectural interface, cycle, numerical, '
+                'parallelism and resource commitments. If a proposal requires changing those commitments, '
+                'preserve evidence and hand the concrete issue back to architecture; do not silently '
+                'implement it. Test the combined region with the control/caller relations causing the cost. '
+                'A function-only proof cannot establish acceptance of a broader state/datapath restructuring. '
+                'Budget limits bound experiments, not the number of source files changed. The exported '
+                'add/modify/delete set and both build identities are independently reviewed as a whole. '
+                'No variant automatically launches complete synthesis. ')
+    return (common + 'Always explicitly repeat --allow-edit only for actual original RTL files that may change; '
+            'the default editable set also includes source wrappers and is unsuitable for integration. '
+            'A separately extracted probe that does not preserve original file paths/bytes remains '
+            'probe-only evidence until a corresponding original-source candidate is created and verified. ')
 
 
 def run(context, remote, *, reason='initial'):
@@ -111,22 +146,9 @@ def run(context, remote, *, reason='initial'):
     prompt = (skill.read_text() + '\nMODE: bounded implementation readiness before independent RTL review.\n'
               'The implementation baseline at @run/work is read-only. Create overlays, probes, configurations '
               'and the standalone workspace only in your supplied campaign work scope. '
-              'SOURCE PATH CONTRACT: the default readiness.py init --project is the absolute '
-              'baseline_project_root from SERVER CONTEXT. A staging project within campaign work is '
-              'also allowed: copy original RTL with the same relative rtl/... paths and identical '
-              'baseline SHA values, and add the necessary frozen probe wrappers or test assets there. '
-              'Use that staging root as --project when added sources are needed. Declare --source, '
-              '--include, --asset and --allow-edit paths relative to the selected project root. '
-              'Always explicitly repeat --allow-edit only for actual original RTL files that may change; '
-              'the default editable set also includes source wrappers and is unsuitable for integration. '
-              'New wrappers may be frozen --source inputs; tests may be --asset inputs. Neither may '
-              'appear in integration allowed edit paths. Original RTL paths and overlay paths must retain rtl/...; '
-              'do not prefix them with work/ or root the integration workspace at the parent run directory. '
-              'This keeps exported original-file identities compatible with guarded integration. '
-              'A separately extracted probe that does not preserve original file paths/bytes remains '
-              'probe-only evidence until a corresponding original-source candidate is created and verified. '
-              'Inspect original requirements at @input/ and the accepted packet at @architecture/. '
-              'Do not run full-design synthesis, edit project scripts, or change the baseline. '
+              + _source_contract(campaign)
+              + 'Inspect original requirements at @input/ and the accepted packet at @architecture/. '
+              'Do not run full-design synthesis, edit project synthesis scripts, or change the baseline. '
               'Use the actual top and ordered source closure; unsupported dependencies require an honest '
               'smaller scope or evidence_incomplete. You may recommend keeping the baseline.\n'
               'SCHEDULER: use rtl_remote submit for persistent outer Docker jobs. Invoke '
@@ -141,22 +163,21 @@ def run(context, remote, *, reason='initial'):
               'and above the inner timeout with cleanup margin. Every submit, including inspection and '
               'small helper commands, consumes a native job and timeout reservation. Prefer remote read/list '
               'for inspection; batch independent cheap inspections into one small helper command when '
-              'execution is necessary. Reserve remaining jobs, tool time and assistant turns for paired '
-              'functional checks, repeated measurements, atomic finalize and independent review. '
-              'PROGRESSIVE PILOT: reserve a functional check, three '
-              'baseline measurements and three candidate measurements, plus finalize/review/delivery '
-              'capacity before allocating a pilot. Choose a short pilot using a small fraction of remaining '
-              'campaign tool time after those reserves; max_job_seconds is a ceiling, not the pilot target. '
-              'If that pilot times out and a representative retry plus the reserved completion work still '
-              'fits, narrow independent multiplicity and/or the source/dependency closure once, preserving '
-              'actual widths, modes, clock/reset/control, output observability and the suspected mechanism. '
-              'Confirm an affordable representative baseline pilot before sealing an optimization variant '
-              'or starting alternative search. A successful pilot can count as a repeat only when its exact '
-              'measurement identity matches the final comparison. A first timeout alone with sufficient '
-              'budget is not a reason to abandon that one useful narrower attempt. If narrowing would '
-              'remove the mechanism or the reserved completion work cannot fit, preserve evidence and '
-              'write an honest keep_baseline or evidence_incomplete report while turns remain to deliver it. '
-              'GROUPED MEASUREMENTS: after the affordable pilot, prefer finite sequential batches over '
+              'execution is necessary. '
+              'CAMPAIGN BUDGET: follow the skill\'s question-specific scope and justified measurement/'
+              'repetition strategy. For a candidate comparison, reserve only its still-missing measurements, '
+              'paired functional check and finalize/review/delivery capacity after checking applicable '
+              'completed receipts. Three measurements per version is a configurable default (--min-repeats), '
+              'not a fixed admission requirement; fewer measurements limit confidence. Baseline-only '
+              'diagnostic checks need their own check/report budget. Establish baseline affordability '
+              'from applicable completed evidence or a short pilot; max_job_seconds is a ceiling, not the pilot target. '
+              'A full-design frontend pass is not a prerequisite for a useful local experiment. Select '
+              'the source/dependency closure and surrounding behavior needed to distinguish the chosen '
+              'hypotheses, and keep conclusions within that scope. After a timeout, use the actual log '
+              'and remaining budget to decide whether a representative narrower attempt is affordable. '
+              'Do not force a code variant; preserve unsuccessful evidence and deliver an honest '
+              'keep_baseline or evidence_incomplete report when appropriate. '
+              'GROUPED MEASUREMENTS: once baseline affordability is established, prefer finite sequential batches over '
               'one native submit and model inspection per repeat. Write a plan P inside W with jobs entries '
               '{job_id, variant, config:<inline normal experiment config>}; optional finalize contains '
               '{variant, baseline_jobs:[IDs], candidate_jobs:[IDs], verification_jobs:[IDs], out:<relative to W>}. '
@@ -243,8 +264,12 @@ def run(context, remote, *, reason='initial'):
                              'Write audit-scope review.json: {"verdict":"accept|revise|insufficient_evidence", '
                              '"comparison_identity":"actual verified identity", "baseline_identity":"...", '
                              '"variant_identity":"...", "reason":"...", "limitations":[]}. '
-                             'End after publishing; the controller validates and integrates only changed '
-                             'original RTL files after an accept.\nSERVER CONTEXT:\n' + _context_text(context, campaign)
+                             'Inspect the complete hardware region, added/deleted modules, caller changes and '
+                             'actual baseline/variant build closures when a regional proposal is present. '
+                             'Require behavior evidence at the changed boundary and affected callers; report '
+                             'budget-limited obligations honestly. Architectural commitments cannot be changed '
+                             'by readiness acceptance. End after publishing; the controller validates and '
+                             'integrates the complete authorized source/build operations after an accept.\nSERVER CONTEXT:\n' + _context_text(context, campaign)
                              + '\nFROZEN DELIVERY TASK:\n' + context.get('task', ''))
             _, review_label = _session(context, remote, campaign, 'readiness_review', review_prompt)
             wait_for_jobs(remote)

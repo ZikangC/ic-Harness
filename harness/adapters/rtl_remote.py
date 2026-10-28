@@ -54,7 +54,7 @@ class Remote:
    for job in pending:self.host_call('cancel',job['job_id'])
    return {'jobs':[self._worker_call({'action':'status','job_id':job['job_id']})for job in pending]}
   result=self._worker_call(request)
-  if action=='submit':
+  if action in ('submit','structure_check'):
    launched=self.host_call('launch',result['job_id'])
    if launched.get('job_id')!=result['job_id']:raise ConnectionError('job launcher returned a different job identity; outcome unknown')
    # Keep worker paths in the container namespace presented to model tools.
@@ -68,7 +68,7 @@ class Remote:
   # SSH retains connection/liveness checks; submitted jobs retain their own timeout.
   # Diagnostic labels never copy arbitrary request data into controller reports.
   action=request.get('action')
-  labels=('init','preflight','put_evidence','append_evidence','jobs','cancel_all','status','cancel','set_status','list','read','write','replace','submit','job_check','revision_begin','proposal','evaluate','revision_adopt','rtl_review_begin','rtl_review_status','rtl_review_decision','rtl_repair_begin','rtl_repair_end','rtl_session_begin','rtl_session_end')
+  labels=('init','preflight','put_evidence','append_evidence','jobs','cancel_all','status','cancel','set_status','list','read','write','replace','submit','structure_check','job_check','revision_begin','proposal','evaluate','revision_adopt','rtl_review_begin','rtl_review_status','rtl_review_decision','rtl_repair_begin','rtl_repair_end','rtl_session_begin','rtl_session_end')
   action=action if isinstance(action,str)and action in labels else'unknown'
   try:p=subprocess.run(argv,input=json.dumps(request),text=True,capture_output=True)
   except (OSError,subprocess.SubprocessError) as error:

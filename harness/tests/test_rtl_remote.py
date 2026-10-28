@@ -41,11 +41,27 @@ def synthetic_parent_binding(test):
   test.synthetic_parents[key]={'parent_session_id':label,'parent_actor_sha256':actor['actor_sha256']}
  return dict(test.synthetic_parents[key])
 
+def structure_report(test, review, *, top='top', sources=None):
+ """Actual native structure job helper for isolated server component fixtures."""
+ sources=sources or ['design.sv']
+ checked=test.call(action='structure_check',scope=review['audit_scope'],review=review['review'],
+                   configuration={'top':top,'sources':sources},timeout_seconds=30)
+ result=test.wait(checked['job_id'])
+ if result.get('exit_code')!=0 or result.get('timed_out')or result.get('error'):
+  raise AssertionError('native clean structure fixture failed: '+repr(result))
+ candidate=test.out/review['candidate_scope'];architecture=test.out/review['architecture_scope']
+ refs=[{'path':'@input/spec.md','sha256':hashlib.sha256((test.out/'snapshot/input/spec.md').read_bytes()).hexdigest()},
+       {'path':'@candidate/RTL_STRUCTURE.json','sha256':hashlib.sha256((candidate/'RTL_STRUCTURE.json').read_bytes()).hexdigest()},
+       {'path':'@run/'+review['architecture_scope']+'/architecture.md','sha256':hashlib.sha256((architecture/'architecture.md').read_bytes()).hexdigest()}]
+ return {'version':1,'required_configurations':[{'job_id':checked['job_id'],'configuration_sha256':checked['configuration_sha256']}],
+         'coverage':{'claim':'full_design','reason':'The isolated component fixture has this one explicit top/source configuration; no project acceptance claim.','source_refs':refs},'waivers':[]},checked['job_id']
+
 class WorkerTests(unittest.TestCase):
  def setUp(self):
   self.missing_job_environment=[name for name in JOB_ENVIRONMENT if not os.environ.get(name)];self.job_environment=not self.missing_job_environment;self.owned_jobs=[]
   self.tmp=tempfile.TemporaryDirectory(prefix='rtl-worker-test-',dir=os.environ.get('HARNESS_TEST_PROJECT_DIR'));self.root=Path(self.tmp.name).resolve();self.runid='rtl-test';h=self.root/'harness';(h/'runtime').mkdir(parents=True);(h/'runtime/__init__.py').touch();(h/'__init__.py').touch()
-  for name in ('input_bundle.py','rtl_worker.py','rtl_job_host.py','rtl_readback.py','rtl_readback_store.py','rtl_readiness.py'):shutil.copyfile(Path(__file__).parents[1]/'runtime'/name,h/'runtime'/name)
+  # Freeze the complete runtime import closure, as the real controller does.
+  for module in (Path(__file__).parents[1]/'runtime').glob('*.py'):shutil.copyfile(module,h/'runtime'/module.name)
   self.eda_python=os.environ.get('HARNESS_TEST_EDA_PYTHON','/opt/eda/bin/python3')if self.job_environment else sys.executable
   self.input=self.root/'input';self.input.mkdir();(self.input/'spec.md').write_text('Test specification');(self.input/'reference.py').write_text('x=1\n')
   b=self.root/'result/architecture';(b/'input').mkdir(parents=True)
@@ -53,7 +69,7 @@ class WorkerTests(unittest.TestCase):
   for n,data in [('design.json',{'requirements':{'x':1}}),('budgets.json',{'ok':True}),('review.json',{}),('decision.json',{'deliverable':True})]:(b/n).write_text(json.dumps(data))
   for n in ('spec.md','reference.py'):shutil.copyfile(self.input/n,b/'input'/n)
   isolation=host_call(self,'describe')['job_isolation']if self.job_environment else{'backend':'docker_readonly_job_v1','uid':os.getuid(),'gid':os.getgid(),'metadata_fixture_only':True}
-  self.req={'action':'init','resume':False,'input_sha256':{n:hashlib.sha256((self.input/n).read_bytes()).hexdigest()for n in ('spec.md','reference.py')},'harness_sha256':inventory(h),'settings':{'tools':{'python':self.eda_python}},'models':{'roles':{}},'job_isolation':isolation}
+  self.req={'action':'init','resume':False,'input_sha256':{n:hashlib.sha256((self.input/n).read_bytes()).hexdigest()for n in ('spec.md','reference.py')},'harness_sha256':inventory(h),'settings':{'tools':{'python':self.eda_python,'yosys':os.environ.get('HARNESS_TEST_YOSYS','/opt/eda/bin/yosys'),'verilator':os.environ.get('HARNESS_TEST_VERILATOR','/opt/eda/bin/verilator')}},'models':{'roles':{}},'job_isolation':isolation}
   dispatch(self.root,self.runid,self.req);self.out=self.root/'output'/self.runid
  def tearDown(self):
   errors=[]
@@ -75,7 +91,7 @@ class WorkerTests(unittest.TestCase):
   else:self.tmp.cleanup()
  def call(self,**req):
   if req.get('action')=='revision_begin'and'parent_session_id'not in req:req.update(synthetic_parent_binding(self))
-  if req.get('action')=='submit':
+  if req.get('action')in('submit','structure_check'):
    if not self.job_environment:self.skipTest('actual jobs require server Docker fixture environment: '+', '.join(self.missing_job_environment))
    value=dispatch(self.root,self.runid,req)
    self.assertEqual(value['status'],'queued');self.owned_jobs.append((self.runid,value['job_id']))

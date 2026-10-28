@@ -1,5 +1,6 @@
 """Frozen architecture delivery mechanics; no model, RPC, jobs or EDA."""
 import json
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
@@ -92,7 +93,7 @@ class ArchitectureContextTests(unittest.TestCase):
         for name in ('architecture.md', 'SOURCE.md', 'decision.json'):
             self.assertEqual(text.count(self.sources[name].decode()), 1)
         self.assertEqual(calls, [{'action': 'rtl_review_status', 'review': review['review'],
-                                  'include_architecture_context': True}])
+                                  'include_architecture_context': True, 'review_scope': review['review_scope']}])
         self.assertNotIn(self.sources['budgets.json'].decode(), text)
 
     def test_real_worker_changed_current_is_labeled_separately_in_controller_context(self):

@@ -43,7 +43,8 @@ def main():
   if context['role']!='implementation':raise ValueError('nested architecture delegation is unavailable')
   script=Path(context['harness_dir'])/'skills/rtl-implementation/scripts/revision.py';spec=importlib.util.spec_from_file_location('rtl_revision',script);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);result=module.run(req,context,remote)
  else:
-  if action not in ('list','read','write','replace','submit','status','cancel','jobs','evaluate','proposal'):raise ValueError('unsupported model workspace action')
+  if action not in ('list','read','write','replace','submit','status','cancel','jobs','evaluate','proposal','structure_check'):raise ValueError('unsupported model workspace action')
+  if action=='structure_check'and context['role']not in ('implementation','rtl_audit'):raise ValueError('RTL structural checks require an implementation or RTL audit role')
   if context['role']=='rtl_audit'and action in ('evaluate','proposal'):raise ValueError('RTL review does not edit/evaluate architecture candidates')
   req['scope']=context['scope']
   if context['role']=='rtl_readiness' and action=='submit':

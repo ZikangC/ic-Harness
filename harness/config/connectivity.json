@@ -1,0 +1,53 @@
+{
+  "checked_at": "2026-10-09T16:47:20.433320+08:00",
+  "ssh": {
+    "host": "txjg7-2@100.118.125.71",
+    "reachable": true,
+    "hostname": "txjg72-NP5570M5"
+  },
+  "container": {
+    "name": "k3demo-eda",
+    "state": "running",
+    "image": "k3demo-eda:nano-kpu-20260817",
+    "mount_source": "/home/txjg7-2/ic-project",
+    "mount_destination": "/work",
+    "project_directory_created": false
+  },
+  "tools": {
+    "python": "3.12.11",
+    "verilator": "5.040",
+    "yosys": "0.64 d8dab5b32666564eca8e18f412973853ce006e61",
+    "openroad_git_revision": "08aa0b1c5ce18e55510560724e38f96f97bc96ad",
+    "standalone_sta_found": false,
+    "liberty_found": true,
+    "local_omp": "17.2.12",
+    "openroad_opensta_command_probe_ok": true
+  },
+  "models": {
+    "deepseek-v4-pro-202606": {
+      "invocation_ok": false,
+      "service_reachable": true,
+      "http_status": 403,
+      "service_code": "403001",
+      "reason": "套餐包被禁用或无调用权限"
+    },
+    "deepseek-v4-flash-202605": {
+      "invocation_ok": false,
+      "service_reachable": true,
+      "http_status": 403,
+      "service_code": "403001",
+      "reason": "套餐包被禁用或无调用权限"
+    }
+  },
+  "scope": "connectivity_and_tool_inventory_only",
+  "simulation_run": false,
+  "synthesis_run": false,
+  "configured_project": {
+    "local": "/Users/chenzikang/code/work/harness_final",
+    "remote": "/home/txjg7-2/ic-project/harness_final",
+    "container": "/work/harness_final"
+  },
+  "installed_checker_environment_only_ok": true,
+  "overall_ready": false,
+  "blocking_reason": "model_provider_permission_error_403001"
+}

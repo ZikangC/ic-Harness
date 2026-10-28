@@ -60,6 +60,14 @@ class HandoffTests(unittest.TestCase):
                               ('events.jsonl', ''.join(json.dumps(e) + '\n' for e in events))]:
             self.call(action='put_evidence', path='control/' + name + '.' + suffix, content=value)
 
+    def rejected_pair(self, request, call_id='rejected-call', error='ValueError: handoff rejected', outer_error=True):
+        return [dict(type='tool_execution_start', toolCallId=call_id, toolName='rtl_remote',
+                     session_id=request['session_id'], args={'action': 'handoff', 'job_id': request['job_id']}),
+                dict(type='tool_execution_end', toolCallId=call_id, toolName='rtl_remote',
+                     session_id=request['session_id'], isError=outer_error,
+                     result={'isError': True, 'content': [{'type': 'text', 'text': json.dumps({'error': error})}],
+                             'details': {'error': error}})]
+
     def test_explicit_bound_handoff_adopts_after_separate_natural_review(self):
         campaign, verified, sessions, request = self.prepare()
         with patch.object(readiness, 'verify_finalization', return_value=verified):
@@ -238,6 +246,74 @@ class HandoffTests(unittest.TestCase):
                     elif case == 'wall_limit': result['elapsed_seconds'] = result['readiness_limits']['session_seconds']
                     elif case == 'raised_limit': result['readiness_limits']['assistant_turns'] += 1
                     elif case == 'natural_claim': result['completed'] = True
+                    self.terminal_files(request, result, events)
+                    with self.assertRaises(ValueError):
+                        self.call(action='rtl_session_end', session_id=request['session_id'])
+
+    def test_terminal_accepts_same_actor_after_explicit_rejections_and_correction(self):
+        for outer_error in (True, False):
+            with self.subTest(outer_error=outer_error):
+                self.tearDown(); self.setUp()
+                campaign, verified, sessions, request = self.prepare()
+                invalid = copy.deepcopy(verified)
+                invalid['baseline_files']['rtl/block.sv']['sha256'] = '0' * 64
+                rejected = []
+                for index, attempt in enumerate((request | {'job_id': '0'}, request)):
+                    with patch.object(readiness, 'verify_finalization', return_value=invalid):
+                        with self.assertRaises(ValueError) as failure:
+                            self.call(action='rtl_readiness_handoff', **attempt)
+                    rejected += self.rejected_pair(attempt, call_id='rejected-' + str(index),
+                        error=type(failure.exception).__name__ + ': ' + str(failure.exception), outer_error=outer_error)
+                    self.assertFalse((self.out / 'control/sessions' / (request['session_id'] + '.handoff.json')).exists())
+                    self.assertEqual(readiness.load(self.out)['state'], 'active')
+                with patch.object(readiness, 'verify_finalization', return_value=verified):
+                    response = self.call(action='rtl_readiness_handoff', **request)
+                    result, events = self.evidence(campaign, request, response)
+                    self.terminal_files(request, result, rejected + events)
+                    ended = self.call(action='rtl_session_end', session_id=request['session_id'])
+                    self.assertTrue(ended['handed_off'])
+                    self.assertFalse(ended['completed'])
+                    completed = self.call(action='rtl_readiness_complete', campaign=campaign['campaign'],
+                        finalization_job_id=request['job_id'], implementation_session_id=request['session_id'],
+                        review_session_id=sessions['review_session_id'])
+                    self.assertTrue(completed['adopted'])
+
+    def test_rejection_cannot_replace_success_or_hide_invalid_terminal_evidence(self):
+        cases = ('rejected_only', 'accepted_payload', 'accepted_plus_error', 'accepted_details', 'empty_error', 'non_string_error',
+                 'missing_public_error', 'missing_outer_error', 'unpaired_rejection', 'duplicate_call',
+                 'different_session', 'second_success', 'different_success_job', 'unpaired_start',
+                 'late_rejection', 'exhausted')
+        for case in cases:
+            with self.subTest(case=case):
+                self.tearDown(); self.setUp()
+                campaign, verified, _, request = self.prepare()
+                with patch.object(readiness, 'verify_finalization', return_value=verified):
+                    response = self.call(action='rtl_readiness_handoff', **request)
+                    result, successful = self.evidence(campaign, request, response)
+                    rejected = self.rejected_pair(request)
+                    events = rejected + successful
+                    if case == 'rejected_only': events = rejected
+                    elif case in ('accepted_payload', 'accepted_plus_error'):
+                        payload = dict(response)
+                        if case == 'accepted_plus_error': payload['error'] = 'claimed rejection'
+                        rejected[-1]['result']['content'][0]['text'] = json.dumps(payload)
+                    elif case == 'accepted_details': rejected[-1]['result']['details'] = response
+                    elif case == 'empty_error': rejected[-1]['result']['content'][0]['text'] = '{"error": "  "}'
+                    elif case == 'non_string_error': rejected[-1]['result']['content'][0]['text'] = '{"error": true}'
+                    elif case == 'missing_public_error': rejected[-1]['result'].pop('isError')
+                    elif case == 'missing_outer_error': rejected[-1].pop('isError')
+                    elif case == 'unpaired_rejection': events = rejected[1:] + successful
+                    elif case == 'duplicate_call': successful[-2]['toolCallId'] = rejected[0]['toolCallId']
+                    elif case == 'different_session': rejected[-1]['session_id'] = 'another-actor'
+                    elif case in ('second_success', 'different_success_job'):
+                        extra = copy.deepcopy(successful[-2:])
+                        for event in extra: event['toolCallId'] = 'other-success'
+                        if case == 'different_success_job': extra[0]['args']['job_id'] = '0'
+                        events += extra
+                    elif case == 'unpaired_start': events.append(dict(type='tool_execution_start',
+                        toolCallId='unfinished', toolName='rtl_remote', args={'action': 'handoff', 'job_id': request['job_id']}))
+                    elif case == 'late_rejection': events = successful + rejected
+                    elif case == 'exhausted': result['budget_exhausted'] = True
                     self.terminal_files(request, result, events)
                     with self.assertRaises(ValueError):
                         self.call(action='rtl_session_end', session_id=request['session_id'])

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Server-side file and process operations. No hardware design decisions."""
 from __future__ import annotations
-import argparse, base64, bisect, datetime, hashlib, json, os, re, shutil, signal, subprocess, sys, time
+import argparse, base64, bisect, datetime, fcntl, hashlib, json, os, re, shutil, signal, subprocess, sys, time
 from pathlib import Path
 from contextlib import nullcontext
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from harness.runtime import rtl_readback_store as readback_store
+from harness.runtime import rtl_structure, rtl_structure_gate
 from harness.runtime import rtl_readiness as readiness
 from harness.runtime import rtl_repair_budget as repair_budgets
 
@@ -77,6 +78,26 @@ def active_jobs(out,scopes=None):
 def require_idle(out,scopes=None):
  if active_jobs(out,scopes):raise ValueError('unfinished jobs prevent RTL transition')
 
+def scope_pending_jobs(out,scope,native_only=False):
+ """Protect the complete writable source closure of a native check."""
+ target=safe(out,scope).resolve();pending=[]
+ for job in sorted((out/'jobs').glob('*')):
+  path=job/'request.json'
+  if not path.is_file():continue
+  request=json.loads(path.read_text())
+  if native_only and not isinstance(request.get('structure_check'),dict):continue
+  source=Path(request.get('source_dir',str(out/request.get('scope','work')))).resolve()
+  try:source.relative_to(out.resolve())
+  except ValueError:raise ValueError('recorded job source escapes this run')from None
+  if not(target==source or target.is_relative_to(source)or source.is_relative_to(target)):continue
+  result_path=job/'result.json'
+  if result_path.is_file():
+   result=json.loads(result_path.read_text());isolation=result.get('isolation')
+   if (result.get('cleanup_complete')is True and result.get('container_running')is False and isinstance(isolation,dict)
+       and isolation.get('cleanup_complete')is True and isolation.get('container_running')is False):continue
+  pending.append(job.name)
+ return pending
+
 def architecture_identity(out):
  current=json.loads((out/'architecture-current.json').read_text())
  closure=closure_inventory(safe(out,current['path']))
@@ -119,19 +140,42 @@ def check_guards(out,guards):
  for guard in guards:
   if closure_inventory(safe(out,guard['path']))!=guard['inventory']:raise ValueError('protected RTL tree changed: '+guard['path'])
 
+def review_scope(review):
+ scope=review.get('review_scope')
+ if 'review_scope'in review and scope not in ('candidate','change'):raise ValueError('unknown RTL review_scope')
+ decision=review.get('decision')
+ if decision and decision.get('review_scope')!=scope:raise ValueError('RTL decision review_scope differs from frozen review')
+ return scope
+
 def review_status(out,review):
  if review is None:return {'review':None}
+ scope=review_scope(review)
  check_candidate(out,review)
  decision=review.get('decision')
  if decision and sha(safe(out,decision['report_path']))!=decision['report_sha256']:raise ValueError('RTL decision report changed')
  if decision and closure_inventory(safe(out,review['audit_scope']))!=review['decision_audit_inventory']:raise ValueError('decided RTL audit evidence changed')
+ if decision:
+  report_data=json.loads(safe(out,decision['report_path']).read_text())
+  if scope is not None and report_data.get('review_scope')!=scope:raise ValueError('RTL report review_scope differs from frozen review')
+  if decision.get('structure_checks')is not None or(scope=='candidate'and decision.get('verdict')=='pass'):
+   if rtl_structure_gate.validate_release(out,review,report_data)!=decision.get('structure_checks'):raise ValueError('decided RTL structure evidence changed')
  result={key:value for key,value in review.items()if key not in ('work_inventory','architecture_identity','decision_audit_inventory')}
  if result.get('repair'):result['repair']={key:value for key,value in result['repair'].items()if key not in ('audit_inventory','work_inventory')}
+ if scope is not None:result['review_scope']=scope
  result['inventory_path']='rtl/reviews/'+review['review']+'.json'
  result['architecture_identity_sha256']=digest(review['architecture_identity'])
  result['architecture_current']=architecture_identity(out)==review['architecture_identity']
  result['parent_readback']=review['architecture_identity'].get('parent_readback')
  result['work_current']=closure_inventory(out/'work')==review['work_inventory']
+ # Observation-change identity only: these hashes do not validate any evidence
+ # or transfer a successful conclusion across candidates.
+ evidence={}
+ for job in sorted((out/'jobs').glob('*')):
+  for name in ('request.json','result.json'):
+   path=job/name
+   if path.is_file():
+    relative=str(path.relative_to(out));evidence[relative]=sha(safe(out,relative))
+ result['evidence_sha256']=digest(evidence)
  return result
 
 def candidate_architecture_context(out,review):
@@ -333,6 +377,9 @@ def rtl_transition(out,req):
   for previous in reviews(out):
    if (previous.get('repair')or{}).get('status')=='active':raise ValueError('unfinished RTL repair prevents candidate freeze')
   seed=get_review(out,req['seed_review'])if req.get('seed_review')else None
+  scope=req.get('review_scope',review_scope(seed)if seed else'candidate')
+  if scope not in ('candidate','change'):raise ValueError('unknown RTL review_scope')
+  if seed and scope!=review_scope(seed):raise ValueError('seed RTL review_scope cannot change after repair')
   if seed and(seed.get('repair')or{}).get('status')!='completed':raise ValueError('seed review needs completed RTL repair')
   if seed:review_status(out,seed)
   existing=reviews(out);number=1+max([int(r['review'].split('-')[-1])for r in existing],default=0)
@@ -344,7 +391,7 @@ def rtl_transition(out,req):
   if architecture_identity(out)!=architecture:raise ValueError('architecture changed while freezing RTL candidate')
   if seed:copy_closure(out/seed['audit_scope'],out/audit)
   else:(out/audit).mkdir(parents=True)
-  value={'review':name,'audit_scope':audit,'candidate_scope':candidate,'architecture_scope':arch,'candidate_sha256':digest({'work':work_inventory,'architecture':architecture}),'work_inventory':work_inventory,'architecture_identity':architecture,'seed_review':seed['review']if seed else None,'decision':None,'repair':None,'created_utc':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+  value={'review':name,'review_scope':scope,'audit_scope':audit,'candidate_scope':candidate,'architecture_scope':arch,'candidate_sha256':digest({'work':work_inventory,'architecture':architecture}),'work_inventory':work_inventory,'architecture_identity':architecture,'seed_review':seed['review']if seed else None,'decision':None,'repair':None,'created_utc':datetime.datetime.now(datetime.timezone.utc).isoformat()}
   save_review(out,value)
   return review_status(out,value)
  review=get_review(out,req.get('review'))
@@ -365,6 +412,9 @@ def rtl_transition(out,req):
   name=req['report_path'];prefix=review['audit_scope']+'/'
   if name.startswith(prefix):name=name[len(prefix):]
   report=safe(out/review['audit_scope'],name);data=json.loads(report.read_text())
+  scope=review_scope(review)
+  if scope is None:raise ValueError('legacy RTL review lacks explicit review_scope; freeze a new review')
+  if data.get('review_scope')!=scope:raise ValueError('RTL report review_scope differs from frozen review')
   verdict=data.get('verdict');allowed={'pass','revise','insufficient_evidence','blocked'}
   expected=req.get('expected_verdict')
   if verdict not in allowed or(expected=='final'and verdict=='revise')or(expected!='final'and verdict!=expected):raise ValueError('RTL verdict differs from selected decision action')
@@ -382,7 +432,11 @@ def rtl_transition(out,req):
    if request.get('scope')!=review['audit_scope']or request.get('candidate_sha256')!=review['candidate_sha256']or result.get('candidate_sha256')!=review['candidate_sha256']:raise ValueError('RTL evidence is not bound to this independent review candidate')
    if result.get('exit_code')==0 and not result.get('timed_out')and not result.get('error'):successful.append(job_id)
   if verdict=='pass'and not successful:raise ValueError('pass requires successful independent evidence bound to candidate')
-  decision={'verdict':verdict,'report_path':str(report.relative_to(out)),'report_sha256':sha(report),'candidate_sha256':review['candidate_sha256'],'reason':data['reason'],'evidence':evidence,'recorded_utc':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+  # Only full-candidate acceptance invokes the full structural release contract.
+  # A bounded change verdict remains non-release in the controller.
+  structure_evidence=rtl_structure_gate.validate_release(out,review,data)if verdict=='pass'and scope=='candidate'else None
+  decision={'verdict':verdict,'review_scope':scope,'report_path':str(report.relative_to(out)),'report_sha256':sha(report),'candidate_sha256':review['candidate_sha256'],'reason':data['reason'],'evidence':evidence,'recorded_utc':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+  if structure_evidence is not None:decision['structure_checks']=structure_evidence
   review['decision']=decision;review['decision_audit_inventory']=closure_inventory(out/review['audit_scope']);save_review(out,review);return review_status(out,review)
  if action=='rtl_repair_begin':
   decision=review.get('decision')
@@ -427,6 +481,34 @@ def writable_scope_links(base):
  if any(links[key]!=count for key,count in counts.items()):
   raise ValueError('writable scope contains external hardlinks')
 
+def ordinary_work_inventory_failure(job,request,phase,stage,error):
+ # Called only after the original protected guards completed successfully.
+ # A vanished mutable build entry is an incomplete observation, not evidence
+ # that any protected expected tree changed. A failed strict symlink resolution
+ # can also mean an unsafe external target: the missing filename may be absent,
+ # but all observed links must resolve completely inside work. Do not classify
+ # dangling/ambiguous links as an ordinary build-file read. Never invent a map.
+ source=Path(request['source_dir'])
+ try:
+  base=source.resolve(strict=True)
+  if not isinstance(error.filename,str)or not Path(error.filename).is_absolute():raise ValueError('missing absolute failed-entry path')
+  Path(error.filename).resolve(strict=False).relative_to(base)
+  def scan_error(error):raise error
+  for directory,names,files in os.walk(source,followlinks=False,onerror=scan_error):
+   for name in names+files:
+    path=Path(directory)/name
+    if path.is_symlink():path.resolve(strict=True).relative_to(base)
+ except (OSError,RuntimeError,ValueError)as containment_error:
+  raise ValueError('ordinary work inventory failure has unproved safe containment')from containment_error
+ failure={'version':2,'kind':'ordinary_work_inventory_incomplete','job_id':job.name,
+          'phase':phase,'stage':stage,'scope':'work','source_dir':request['source_dir'],
+          'request_sha256':sha(job/'request.json'),
+          'guard_set_sha256':digest(request.get('integrity_guards',[])),
+          'protected_guards_checked':True,'source_containment_checked':True,'native_job':False,
+          'exception_type':'FileNotFoundError','message':str(error),
+          'errno':error.errno,'filename':str(error.filename)if error.filename is not None else None}
+ return {'ok':False,'error':'FileNotFoundError: '+str(error),'job_check_failure':failure}
+
 def job_check(out,req):
  job_id=req.get('job_id')
  if not isinstance(job_id,str)or not re.fullmatch(r'[0-9]+',job_id):raise ValueError('invalid job id')
@@ -440,12 +522,29 @@ def job_check(out,req):
  source=safe(out,scope)
  if request.get('run_dir')!=str(out)or request.get('source_dir')!=str(source):raise ValueError('job paths differ from recorded scope')
  safe(source,os.path.relpath(request['cwd'],source))
- check_guards(out,request.get('integrity_guards',[]));writable_scope_links(source)
+ marker=request.get('structure_check')
+ check_guards(out,request.get('integrity_guards',[]))
+ try:writable_scope_links(source)
+ except FileNotFoundError as error:
+  if scope=='work'and marker is None:return ordinary_work_inventory_failure(job,request,phase,'writable_scope_links',error)
+  raise
+ if marker is not None:
+  if not isinstance(marker,dict)or marker.get('version')!=2:raise ValueError('invalid native structure job marker')
+  config_path=job/'structure-config.json';config=json.loads(config_path.read_text());runner=out/'snapshot/harness/runtime/rtl_structure.py'
+  if marker.get('config_sha256')!=digest(config)or marker.get('config_file_sha256')!=sha(config_path)or marker.get('runner_sha256')!=sha(runner)or marker.get('runner_sha256')!=manifest['harness_sha256'].get('runtime/rtl_structure.py'):raise ValueError('native structure job configuration or runner changed')
+  if request['argv']!=[manifest['settings']['tools'].get('python'),str(runner),'--config',str(config_path)]:raise ValueError('native structure job command differs')
+  if config.get('version')!=2 or config.get('tool_path')!=manifest['settings']['tools'].get('yosys') or config.get('lint_tool_path')!=manifest['settings']['tools'].get('verilator'):raise ValueError('native structure job tools differ from frozen configuration')
+  bound=config.get('binding',{});checked_source=safe(out,bound['candidate_scope'])
+  if config.get('source_root')!=str(checked_source.resolve())or bound.get('scope')!=scope or bound.get('run_id')!=out.name or bound.get('manifest_sha256')!=sha(out/'manifest.json')or digest(source_inventory(checked_source))!=bound.get('source_inventory_sha256'):raise ValueError('native structure job source/configuration binding changed')
  if scope.startswith('readiness/'):
   campaign=readiness.from_scope(out,scope);readiness.check_baseline(out,campaign)
   if request.get('readiness_budget',{}).get('source_sha256')!=campaign['source_sha256']:raise ValueError('readiness source identity changed')
   return {'ok':True,('source_at_start_sha256'if phase=='before'else'source_after_sha256'):campaign['source_files']}
- return {'ok':True,('source_at_start_sha256'if phase=='before'else'source_after_sha256'):source_inventory(source)}
+ try:observed=source_inventory(source)
+ except FileNotFoundError as error:
+  if scope=='work'and marker is None:return ordinary_work_inventory_failure(job,request,phase,'source_inventory',error)
+  raise
+ return {'ok':True,('source_at_start_sha256'if phase=='before'else'source_after_sha256'):observed}
 
 def summary_job(job):
  req=json.loads((job/'request.json').read_text());result=job/'result.json'
@@ -463,9 +562,33 @@ def summary_job(job):
   p=job/(n+'.log');s[n+'_path']=str(p)
   if p.exists():
    with p.open('rb')as f:f.seek(max(0,p.stat().st_size-4000));s[n+'_tail']=f.read().decode(errors='replace')
+ structure=rtl_structure_gate.job_summary(job,req)
+ if structure is not None:s['structure_check']=structure
  return s
 
 def dispatch(root,run_id,req):
+ """Serialize only same-scope admission; never hold a lock during EDA waits."""
+ action=req.get('action')
+ if action not in ('write','replace','submit','structure_check','rtl_readiness_complete'):return _dispatch(root,run_id,req)
+ if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*',run_id):raise ValueError('unsafe run id')
+ # Readiness publication changes live work regardless of its campaign scope.
+ scope='work'if action=='rtl_readiness_complete'else req.get('scope','work')
+ if scope!='work'and not re.fullmatch(r'(architecture/revision-[0-9]+/(candidate|audit)|audit/review-[1-9][0-9]*|readiness/campaign-[1-9][0-9]*/(work|audit))',scope):raise ValueError('invalid editing scope')
+ out=Path(root)/'output'/run_id
+ if not out.is_dir():return _dispatch(root,run_id,req)
+ # The empty coordination inode lives in trusted control, outside all checked
+ # source scopes and decided/session evidence. Its contents never change.
+ lock=out/'control'/('native-scope-admission-'+digest(str(safe(out,scope).resolve()))[:20]+'.lock')
+ if lock.is_symlink()or lock.parent.is_symlink():raise ValueError('native admission lock must not be a symlink')
+ lock.parent.mkdir(parents=True,exist_ok=True)
+ fd=os.open(lock,os.O_RDWR|os.O_CREAT|getattr(os,'O_NOFOLLOW',0),0o600)
+ try:
+  fcntl.flock(fd,fcntl.LOCK_EX)
+  if os.fstat(fd).st_size:raise ValueError('native admission coordination file changed')
+  return _dispatch(root,run_id,req)
+ finally:os.close(fd)
+
+def _dispatch(root,run_id,req):
  if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*',run_id):raise ValueError('unsafe run id')
  out=root/'output'/run_id;action=req['action']
  if action in ('init','preflight'):
@@ -525,7 +648,10 @@ def dispatch(root,run_id,req):
  if action in ('rtl_readiness_handoff','rtl_readiness_handoff_status'):
   from harness.runtime import rtl_readiness_handoff
   return rtl_readiness_handoff.commit(out,req,require_idle)if action=='rtl_readiness_handoff'else rtl_readiness_handoff.status(out,req)
- if action=='rtl_readiness_complete':return readiness.complete(out,req,require_idle)
+ if action=='rtl_readiness_complete':
+  pending=scope_pending_jobs(out,'work',native_only=True)
+  if pending:raise ValueError('native structure check protects this source closure; wait or cancel the owned job and wait for terminal cleanup before readiness publication: '+','.join(pending))
+  return readiness.complete(out,req,require_idle)
  if action=='rtl_session_begin':return readback_store.begin_session(out,req)
  if action=='rtl_session_end':
   actor,_=readback_store._actor(out,req.get('session_id'))
@@ -549,7 +675,10 @@ def dispatch(root,run_id,req):
    if not(job/'request.json').is_file():raise ValueError('unknown job')
    result=job/'result.json';data=json.loads(result.read_text())if result.exists()else{}
    cleanup_failed=isinstance(data.get('isolation'),dict)and data['isolation'].get('cleanup_complete')is False
-   return {'job_id':job.name,'status':'cleanup_failed'if cleanup_failed else'completed'if result.exists()else'running','result_path':str(result),**{key:data[key]for key in ('exit_code','timed_out','error','elapsed_seconds','candidate_sha256','isolation')if key in data}}
+   value={'job_id':job.name,'status':'cleanup_failed'if cleanup_failed else'completed'if result.exists()else'running','result_path':str(result),**{key:data[key]for key in ('exit_code','timed_out','error','elapsed_seconds','candidate_sha256','isolation')if key in data}}
+   request=json.loads((job/'request.json').read_text());structure=rtl_structure_gate.job_summary(job,request)
+   if structure is not None:value['structure_check']=structure
+   return value
   return summary_job(job)
  if action=='cancel':
   raise ValueError('cancel jobs through the configured host Docker launcher')
@@ -557,6 +686,9 @@ def dispatch(root,run_id,req):
  if action.startswith(('rtl_review_','rtl_repair_')):return rtl_transition(out,req)
  scope=req.get('scope','work')
  if scope!='work'and not re.fullmatch(r'(architecture/revision-[0-9]+/(candidate|audit)|audit/review-[1-9][0-9]*|readiness/campaign-[1-9][0-9]*/(work|audit))',scope):raise ValueError('invalid editing scope')
+ if action in ('write','replace','submit'):
+  pending=scope_pending_jobs(out,scope,native_only=True)
+  if pending:raise ValueError('native structure check protects this source closure; wait or cancel the owned job and wait for terminal cleanup before editing/submitting: '+','.join(pending))
  readiness_scope=scope.startswith('readiness/')
  if readiness_scope:
   if action not in ('list','read','write','replace','submit'):raise ValueError('unsupported readiness workspace action')
@@ -591,7 +723,7 @@ def dispatch(root,run_id,req):
    content=text.replace(old,content,1)
   p.parent.mkdir(parents=True,exist_ok=True);tmp=p.with_name(p.name+'.tmp');tmp.write_text(content);tmp.replace(p)
   return {'path':name,'scope':scope,'run_path':str(Path(scope)/name),'sha256':sha(p),'bytes':p.stat().st_size}
- if action=='submit':
+ if action in ('submit','structure_check'):
   session_binding={}
   if readiness_scope and ('session_id'in req or 'session_actor_sha256'in req):
    actor,actor_path=readback_store._actor(out,req.get('session_id'))
@@ -599,12 +731,6 @@ def dispatch(root,run_id,req):
       or (out/'control/sessions'/(actor['session_id']+'.end.json')).exists()):raise ValueError('readiness job actor binding mismatch or ended session')
    if sha(out/'control'/(actor['session_id']+'.prompt.txt'))!=actor['prompt_sha256']:raise ValueError('readiness job registered prompt changed')
    session_binding={'session_id':actor['session_id'],'session_actor_sha256':sha(actor_path)}
-  argv=req['argv']
-  if not isinstance(argv,list)or not argv or any(not isinstance(v,str)for v in argv):raise ValueError('argv must be nonempty string array')
-  argv=[str(read_path(out,work,v,physical=True,review=req.get('review')))if v.startswith(('@input/','@architecture/','@skill/','@run/','@candidate/'))else v for v in argv]
-  allowed=json.loads((out/'manifest.json').read_text())['settings']['tools']
-  if argv[0]in allowed:argv=[allowed[argv[0]],*argv[1:]]
-  if argv[0]not in set(allowed.values()):raise ValueError('use configured tool names: '+','.join(allowed))
   guards=[]if readiness_scope else integrity_guards(out);repair=next((r for r in reviews(out)if(r.get('repair')or{}).get('status')=='active'),None)
   repair_budget=repair_budgets.binding(out,repair)if scope=='work'else None
   default_timeout=campaign['budgets']['max_job_seconds']if readiness_scope else(repair_budget['budgets']['max_job_seconds']if repair_budget else 600)
@@ -612,6 +738,32 @@ def dispatch(root,run_id,req):
   if (readiness_scope or repair_budget is not None)and type(timeout_value)is not int:raise ValueError('readiness timeout must be an integer')
   timeout=int(timeout_value)
   if timeout<=0:raise ValueError('command timeout must be positive; total run is unlimited')
+  structure_config=None
+  if action=='structure_check':
+   if scope!='work'and not scope.startswith('audit/'):raise ValueError('structure checks require implementation or independent RTL audit scope')
+   if scope.startswith('audit/')and metadata.get('decision'):raise ValueError('decided audit scope is frozen')
+   configuration=req.get('configuration')
+   if not isinstance(configuration,dict)or set(configuration)-rtl_structure_gate.CONFIGURATION_FIELDS:raise ValueError('invalid structure compile configuration')
+   pending=scope_pending_jobs(out,scope)
+   if pending:raise ValueError('native structure check requires this source closure idle; wait for terminal cleanup of existing jobs: '+','.join(pending))
+   source=out/metadata['candidate_scope']if scope.startswith('audit/')else work
+   manifest=json.loads((out/'manifest.json').read_text());tools=manifest['settings']['tools']
+   if any(not isinstance(tools.get(name),str)or not tools[name].startswith('/')for name in ('python','yosys','verilator')):raise ValueError('native structure check remains unclosed without configured Python, Yosys and Verilator')
+   binding={'version':1,'run_id':out.name,'scope':scope,'candidate_scope':metadata['candidate_scope']if scope.startswith('audit/')else'work','candidate_sha256':metadata['candidate_sha256']if scope.startswith('audit/')else None,'source_inventory_sha256':digest(source_inventory(source)),'manifest_sha256':sha(out/'manifest.json'),'input_sha256':manifest['input_sha256'],'architecture_identity_sha256':digest(metadata['architecture_identity']if scope.startswith('audit/')else architecture_identity(out))}
+   execution_options={}
+   if 'execution_plan'in req:
+    if req['execution_plan']not in('complete','diagnostic_first'):raise ValueError('unsupported structure execution_plan')
+    execution_options['execution_plan']=req['execution_plan']
+   structure_config=rtl_structure.normalize_config(source,{**configuration,**execution_options,'version':2,'tool_path':tools['yosys'],'lint_tool_path':tools['verilator'],'timeout_seconds':timeout,'binding':binding})
+   runner=out/'snapshot/harness/runtime/rtl_structure.py'
+   if sha(runner)!=manifest['harness_sha256'].get('runtime/rtl_structure.py'):raise ValueError('frozen structure runner changed')
+   argv=[tools['python'],str(runner),'--config','PENDING_NATIVE_CONFIGURATION']
+  else:argv=req['argv']
+  if not isinstance(argv,list)or not argv or any(not isinstance(v,str)for v in argv):raise ValueError('argv must be nonempty string array')
+  argv=[str(read_path(out,work,v,physical=True,review=req.get('review')))if v.startswith(('@input/','@architecture/','@skill/','@run/','@candidate/'))else v for v in argv]
+  allowed=json.loads((out/'manifest.json').read_text())['settings']['tools']
+  if argv[0]in allowed:argv=[allowed[argv[0]],*argv[1:]]
+  if argv[0]not in set(allowed.values()):raise ValueError('use configured tool names: '+','.join(allowed))
   if repair and scope.startswith('audit/'):raise ValueError('audit jobs cannot run during RTL repair')
   candidate_id=campaign['source_sha256']if readiness_scope else(metadata['candidate_sha256']if scope.startswith('audit/')else(proposal_identity(work.parent/'candidate')['candidate_sha256']if scope.endswith('/audit')else None))
   manifest=json.loads((out/'manifest.json').read_text());isolation=manifest.get('job_isolation')
@@ -621,12 +773,15 @@ def dispatch(root,run_id,req):
   reservation_context=readiness.submit_reservation(out,scope,timeout,argv,cwd)if readiness_scope else(repair_budgets.submit_reservation(out,repair,repair_budget,timeout)if repair_budget is not None else nullcontext(None))
   with reservation_context as reservation:
    jobid=str(time.time_ns());job=out/'jobs'/jobid;job.mkdir(parents=True)
-   record={'argv':argv,'cwd':str(cwd),'run_dir':str(out),'scope':scope,'timeout_seconds':timeout,'source_dir':str(work),'source_sha256':campaign['source_files']if readiness_scope else source_inventory(work),'candidate_sha256':candidate_id,'integrity_guards':guards,'repair_review':repair['review']if repair and scope=='work'else None,'job_isolation':isolation}
-   record.update(session_binding)
+   extra={}
+   if structure_config is not None:
+    save(job/'structure-config.json',structure_config);argv[-1]=str(job/'structure-config.json')
+    extra['structure_check']={'version':2,'config_sha256':digest(structure_config),'config_file_sha256':sha(job/'structure-config.json'),'runner_sha256':sha(out/'snapshot/harness/runtime/rtl_structure.py')}
+   record={'argv':argv,'cwd':str(cwd),'run_dir':str(out),'scope':scope,'timeout_seconds':timeout,'source_dir':str(work),'source_sha256':campaign['source_files']if readiness_scope else source_inventory(work),'candidate_sha256':candidate_id,'integrity_guards':guards,'repair_review':repair['review']if repair and scope=='work'else None,'job_isolation':isolation,**extra,**session_binding}
    if readiness_scope:record['readiness_budget']=reservation
    if repair_budget is not None:record['repair_budget']=reservation
    save(job/'request.json',record)
-  return {'job_id':jobid,'status':'queued','logs':str(job)}
+  return {'job_id':jobid,'status':'queued','logs':str(job),**({'configuration_sha256':digest(structure_config),'config_path':str((job/'structure-config.json').relative_to(out))}if structure_config is not None else{})}
  if action=='revision_begin':
   readback_store.require_active_parent(out,req.get('parent_session_id'),req.get('parent_actor_sha256'))
   identity=architecture_identity(out);base=out/identity['current']['path'];parent=out/'architecture';parent.mkdir(exist_ok=True)

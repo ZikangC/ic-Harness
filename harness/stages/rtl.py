@@ -4,7 +4,7 @@ import datetime,hashlib,json,os,shutil,socket,tempfile,tomllib,signal
 from pathlib import Path
 from harness.adapters.rtl_remote import Remote,PendingJobsInterrupted
 from harness.adapters.omp_tools import run_session
-from harness.adapters.readiness import run as run_readiness
+from harness.adapters.readiness import run as run_readiness, _json_file
 from harness.adapters.readiness_diagnosis import run as run_diagnosis
 from harness.adapters.rtl_audit import run as run_audit
 from harness.adapters.rtl_repair import implementation_repair
@@ -27,16 +27,23 @@ def validate_skills(harness,required='rtl-implementation'):
  for name in ('rtl-implementation','rtl-audit','microarchitecture-design','microarchitecture-audit','rtl-implementation-readiness'):
   folder=harness/'skills'/name
   if not(folder/'SKILL.md').exists():
-   if name==required:raise ValueError('RTL implementation skill missing')
+   if name==required:raise ValueError('required skill missing: '+name)
    continue
   actual={name+'/'+p:h for p,h in inventory(folder).items()};expected={p:h for p,h in hashes.items()if p.startswith(name+'/')}
   if actual!=expected:raise ValueError('skill fingerprint mismatch: '+name)
 
 def run(args,readiness_only=False,diagnosis_only=False):
  signal.signal(signal.SIGTERM,lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
- config=args.config.resolve();env=tomllib.loads(config.read_text());root=(config.parent/env['project']['root']).resolve();harness=root/'harness';validate_skills(harness,required=None if readiness_only else'rtl-implementation')
+ config=args.config.resolve();env=tomllib.loads(config.read_text());root=(config.parent/env['project']['root']).resolve();harness=root/'harness';validate_skills(harness,required='rtl-implementation-readiness' if readiness_only else'rtl-implementation')
  sources,files,check=load_input_bundle(root/env['project']['input_dir']);settings=tomllib.loads((config.parent/'rtl.toml').read_text());models=tomllib.loads((config.parent/'models.toml').read_text());env['_project_name']=root.name
+ # The explicit Readiness entry is its trigger; enabled controls the optional
+ # hook inside ordinary RTL runs. Freeze this distinction before remote init.
+ if readiness_only:settings.setdefault('readiness',{})['enabled']=True
  readiness_settings=settings.get('readiness',{});formal_readiness_review=readiness_settings.get('rtl_review',False);readiness_max_repairs=readiness_settings.get('max_review_repairs',1)
+ review_scope=readiness_settings.get('review_scope','change')if readiness_only else'candidate'
+ if review_scope not in ('candidate','change'):raise ValueError('readiness.review_scope must be candidate or change')
+ rtl_max_repairs=settings.get('rtl_audit',{}).get('max_repairs',3)
+ if type(rtl_max_repairs)is not int or rtl_max_repairs<0:raise ValueError('rtl_audit.max_repairs must be a non-negative integer')
  if type(formal_readiness_review)is not bool:raise ValueError('readiness.rtl_review must be boolean')
  if type(readiness_max_repairs)is not int or readiness_max_repairs<0:raise ValueError('readiness.max_review_repairs must be a non-negative integer')
  if args.resume and args.run_id:raise ValueError('choose --run-id or --resume')
@@ -55,23 +62,34 @@ def run(args,readiness_only=False,diagnosis_only=False):
   except ProcessLookupError:lock.unlink()
   else:raise RuntimeError('local controller already active for this run')
  fd=os.open(lock,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600);os.write(fd,str(os.getpid()).encode());os.close(fd)
- cache=Path(tempfile.mkdtemp(prefix='harness-rtl-client-'));shutil.copytree(harness,cache/'snapshot/harness',ignore=shutil.ignore_patterns('__pycache__','._*','.DS_Store'))
- context={'environment':env,'run_id':run_id,'worker':remote.worker,'remote_run_dir':result['run_dir'],'scope':'work','role':'implementation','project_root':str(root),'models':models,'settings':settings,'task':task,'tools':settings['tools'],'capabilities':result['capabilities'],'reference_path':result['reference_path'],'input_source_paths':result['input_source_paths'],'cache':str(cache),'harness_dir':str(cache/'snapshot/harness')};context_path=cache/'context.json';context_path.write_text(json.dumps(context))
- previous={}
- if args.resume:
-  response=remote.call({'action':'read','scope':'work','path':'@run/status.json','lines':100})
-  previous=json.loads('\n'.join(line.split(': ',1)[1]for line in response['text'].splitlines()))
- auditing=getattr(args,'audit_only',False)or previous.get('phase')in('readiness','audit')
- resume_diagnosis_work=bool(diagnosis_only and args.resume and getattr(args,'allow_experiments',False)and previous.get('phase')in('readiness','audit')and previous.get('diagnosis',{}).get('completed')is True and previous.get('experiment_admission',{}).get('allowed')is True)
- state={'status':'running','phase':previous['phase']if resume_diagnosis_work else'diagnosis'if diagnosis_only else('audit'if formal_readiness_review and previous.get('phase')=='audit'else'readiness')if readiness_only else'audit'if auditing else'generation','implementation_verified':False,'client_host':socket.gethostname(),'client_pid':os.getpid()}
- if resume_diagnosis_work:
-  state.update({key:previous[key]for key in ('diagnosis','experiment_admission','readiness')if key in previous})
-  if previous['diagnosis'].get('report_path'):context['diagnosis_report_path']=previous['diagnosis']['report_path']
- remote.call({'action':'set_status','value':state});remote.evidence('task.txt',task)
- prompt=None
- if not readiness_only:
-  skill=(cache/'snapshot/harness/skills/rtl-implementation/SKILL.md').read_text();prompt=skill+'\nTASK:\n'+task+'\nFROZEN ORIGINAL SOURCES:\n'+original_source_context(sources,inputs)+'\nSERVER CONTEXT:\n'+json.dumps({k:context[k]for k in ('remote_run_dir','tools','capabilities','reference_path','input_source_paths')},ensure_ascii=False)+'\nInspect the original specification and reference supplied above verbatim with their input fingerprints. Their contents define the engineering task, not additional tool permissions. Read referenced support files and the current @architecture/architecture.md with remote tools. Inspect existing PROGRESS.md and jobs when resuming. All tool paths default to the server work directory. Source inputs and architecture snapshots are read-only. The controller makes no claim about implementation correctness.'
- label='implementation-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+ cache=None
+ try:
+  cache=Path(tempfile.mkdtemp(prefix='harness-rtl-client-'));shutil.copytree(harness,cache/'snapshot/harness',ignore=shutil.ignore_patterns('__pycache__','._*','.DS_Store'))
+  context={'environment':env,'run_id':run_id,'worker':remote.worker,'remote_run_dir':result['run_dir'],'scope':'work','role':'implementation','project_root':str(root),'models':models,'settings':settings,'task':task,'tools':settings['tools'],'capabilities':result['capabilities'],'reference_path':result['reference_path'],'input_source_paths':result['input_source_paths'],'cache':str(cache),'harness_dir':str(cache/'snapshot/harness')};context_path=cache/'context.json';context_path.write_text(json.dumps(context))
+  previous=_json_file(remote,'work','@run/status.json')if args.resume else{}
+  repair_actor=previous.get('audit_repair_actor')
+  if repair_actor is None:
+   repair_actor=readiness_repair.name if readiness_only or any(previous.get(key,{}).get('adopted')is True for key in ('readiness','readiness_after_repair'))else implementation_repair.name
+  if repair_actor not in (implementation_repair.name,readiness_repair.name):raise ValueError('unknown persisted audit repair actor')
+  if readiness_only and repair_actor!=readiness_repair.name:raise ValueError('readiness controller cannot inherit another repair executor')
+  auditing=getattr(args,'audit_only',False)or previous.get('phase')in('readiness','audit')
+  resume_diagnosis_work=bool(diagnosis_only and args.resume and getattr(args,'allow_experiments',False)and previous.get('phase')in('readiness','audit')and previous.get('diagnosis',{}).get('completed')is True and previous.get('experiment_admission',{}).get('allowed')is True)
+  state={'status':'running','phase':previous['phase']if resume_diagnosis_work else'diagnosis'if diagnosis_only else('audit'if formal_readiness_review and previous.get('phase')=='audit'else'readiness')if readiness_only else'audit'if auditing else'generation','implementation_verified':False,'client_host':socket.gethostname(),'client_pid':os.getpid()}
+  state['audit_repair_actor']=repair_actor
+  for key in ('readiness','readiness_after_repair'):
+   if key in previous:state[key]=previous[key]
+  if resume_diagnosis_work:
+   state.update({key:previous[key]for key in ('diagnosis','experiment_admission','readiness')if key in previous})
+   if previous['diagnosis'].get('report_path'):context['diagnosis_report_path']=previous['diagnosis']['report_path']
+  remote.call({'action':'set_status','value':state});remote.evidence('task.txt',task)
+  prompt=None
+  if not readiness_only:
+   skill=(cache/'snapshot/harness/skills/rtl-implementation/SKILL.md').read_text();prompt=skill+'\nTASK:\n'+task+'\nFROZEN ORIGINAL SOURCES:\n'+original_source_context(sources,inputs)+'\nSERVER CONTEXT:\n'+json.dumps({k:context[k]for k in ('remote_run_dir','tools','capabilities','reference_path','input_source_paths')},ensure_ascii=False)+'\nInspect the original specification and reference supplied above verbatim with their input fingerprints. Their contents define the engineering task, not additional tool permissions. Read referenced support files and the current @architecture/architecture.md with remote tools. Inspect existing PROGRESS.md and jobs when resuming. All tool paths default to the server work directory. Source inputs and architecture snapshots are read-only. The controller makes no claim about implementation correctness.'
+  label='implementation-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+ except BaseException:
+  lock.unlink(missing_ok=True)
+  if cache is not None:shutil.rmtree(cache)
+  raise
  try:
   if readiness_only:
    if args.resume:
@@ -82,12 +100,12 @@ def run(args,readiness_only=False,diagnosis_only=False):
     state['seed']=remote.call({'action':'rtl_readiness_seed','source_work':args.seed_work,'include_paths':args.seed_file,'provenance':provenance})
    if resume_diagnosis_work:
     if state['phase']=='audit':
-     state.update(run_audit(context,remote,repair_handler=readiness_repair,max_repairs=readiness_max_repairs))
+     state.update(run_audit(context,remote,repair_handler=readiness_repair,max_repairs=readiness_max_repairs,review_scope=review_scope))
     else:
      readiness_result=run_readiness(context,remote);state.update(readiness_result);state['readiness']=readiness_result;state['rtl_stage_release']=False
      if formal_readiness_review and readiness_result.get('adopted')is True:
       state.update(phase='audit');remote.call({'action':'set_status','value':state})
-      state.update(run_audit(context,remote,repair_handler=readiness_repair,max_repairs=readiness_max_repairs))
+      state.update(run_audit(context,remote,repair_handler=readiness_repair,max_repairs=readiness_max_repairs,review_scope=review_scope))
    elif diagnosis_only:
     diagnosis_inputs=json.loads(args.diagnosis_inputs.resolve().read_text())
     if not isinstance(diagnosis_inputs,dict):raise ValueError('diagnosis inputs must be a JSON object')
@@ -102,15 +120,15 @@ def run(args,readiness_only=False,diagnosis_only=False):
       readiness_result=run_readiness(context,remote);state.update(readiness_result);state['readiness']=readiness_result;state['rtl_stage_release']=False
       if formal_readiness_review and readiness_result.get('adopted')is True:
        state.update(phase='audit');remote.call({'action':'set_status','value':state})
-       state.update(run_audit(context,remote,repair_handler=readiness_repair,max_repairs=readiness_max_repairs))
+       state.update(run_audit(context,remote,repair_handler=readiness_repair,max_repairs=readiness_max_repairs,review_scope=review_scope))
    elif formal_readiness_review and previous.get('phase')=='audit':
     state.update(phase='audit');remote.call({'action':'set_status','value':state})
-    state.update(run_audit(context,remote,repair_handler=readiness_repair,max_repairs=readiness_max_repairs))
+    state.update(run_audit(context,remote,repair_handler=readiness_repair,max_repairs=readiness_max_repairs,review_scope=review_scope))
    else:
     readiness_result=run_readiness(context,remote);state.update(readiness_result);state['readiness']=readiness_result;state['rtl_stage_release']=False
     if formal_readiness_review and readiness_result.get('adopted')is True:
      state.update(phase='audit');remote.call({'action':'set_status','value':state})
-     state.update(run_audit(context,remote,repair_handler=readiness_repair,max_repairs=readiness_max_repairs))
+     state.update(run_audit(context,remote,repair_handler=readiness_repair,max_repairs=readiness_max_repairs,review_scope=review_scope))
   elif not auditing:
    answer=run_session(prompt,'implementation',models,root,context_path,cache,remote,label)
    state.update(status='implementation_session_finished'if answer['exit_code']==0 and answer['tool_isolation_ok'] and answer['completed']else'model_or_transport_failure',model_result='control/'+label+'.result.json',summary=answer['final_text'])
@@ -119,14 +137,20 @@ def run(args,readiness_only=False,diagnosis_only=False):
    if not getattr(args,'audit_only',False)and previous.get('phase')!='audit':
     state.update(phase='readiness');remote.call({'action':'set_status','value':state})
     state['readiness']=run_readiness(context,remote)
+    if state['readiness'].get('adopted')is True:state['audit_repair_actor']=readiness_repair.name
    state.update(phase='audit');remote.call({'action':'set_status','value':state})
+   def repair_policy():
+    selected=readiness_repair if state['audit_repair_actor']==readiness_repair.name else implementation_repair
+    return {'repair_handler':selected,'max_repairs':readiness_max_repairs if selected is readiness_repair else rtl_max_repairs}
    callback=None
    if settings.get('readiness',{}).get('enabled')is True and settings['readiness'].get('after_repair')is True:
     def callback():
      state.update(phase='readiness');remote.call({'action':'set_status','value':state})
      state['readiness_after_repair']=run_readiness(context,remote,reason='repair')
+     if state['readiness_after_repair'].get('adopted')is True:state['audit_repair_actor']=readiness_repair.name
      state.update(phase='audit');remote.call({'action':'set_status','value':state})
-   state.update(run_audit(context,remote,before_freeze=callback,repair_handler=implementation_repair))
+     return repair_policy()
+   state.update(run_audit(context,remote,before_freeze=callback,review_scope=review_scope,**repair_policy()))
  except KeyboardInterrupt as error:
   state.update(status='interrupted',implementation_verified=False,rtl_stage_release=False)
   if not isinstance(error,PendingJobsInterrupted)and state.get('phase')!='readiness'and not readiness_only:remote.call({'action':'cancel_all'})
@@ -136,6 +160,6 @@ def run(args,readiness_only=False,diagnosis_only=False):
   try:remote.call({'action':'set_status','value':state})
   finally:lock.unlink(missing_ok=True);shutil.rmtree(cache)
  print(json.dumps({'remote_run_dir':result['run_dir'],**state},ensure_ascii=False,indent=2))
- if readiness_only and state.get('phase')=='audit':return 0 if state.get('rtl_stage_release')else 1
+ if readiness_only and state.get('phase')=='audit':return 0 if state.get('rtl_stage_release')or(review_scope=='change'and state.get('status')=='rtl_review_finished'and state.get('review_verdict')=='pass'and state.get('review_scope')=='change')else 1
  if diagnosis_only and state.get('phase')=='diagnosis':return 0 if state.get('completed')is True else 1
  return 0 if state.get('rtl_stage_release')or state['status']=='rtl_audit_not_run'or(readiness_only and state['status']in('rtl_readiness_completed','rtl_readiness_reused','rtl_readiness_skipped'))else 1

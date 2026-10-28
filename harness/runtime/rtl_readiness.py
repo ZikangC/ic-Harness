@@ -14,6 +14,8 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
+import shutil
 
 SCOPE = re.compile(r'^readiness/(campaign-[1-9][0-9]*)/(work|audit)$')
 RTL_SUFFIXES = {'.v', '.sv', '.vh', '.svh'}
@@ -67,8 +69,38 @@ def settings(out):
     return result
 
 
-def source_inventory(base):
-    """Hash only existing RTL/header inputs, never historical build/results trees."""
+def regional_policy(out):
+    """Explicit project opt-in; budgets and engineering decisions remain separate."""
+    configured = json.loads((out / 'manifest.json').read_text()).get('settings', {}).get('readiness', {})
+    result = {}
+    for key in ('region_roots', 'build_files'):
+        values = configured.get(key, [])
+        if not isinstance(values, list) or any(not isinstance(v, str) for v in values) or len(set(values)) != len(values):
+            raise ValueError('invalid readiness ' + key)
+        for name in values:
+            path = owned(out / 'work', name)
+            if str(path.relative_to(out / 'work')) != name:
+                raise ValueError('readiness policy paths must be canonical')
+            if key == 'region_roots':
+                if Path(name).parts[0] != 'rtl':
+                    raise ValueError('readiness region roots must stay under rtl')
+                if path.exists() and not path.is_dir():
+                    raise ValueError('readiness region root must be a directory')
+            elif (Path(name).parts[0] in {'input', 'snapshot', 'tests', 'audit', 'readiness', 'output', 'control'}
+                  or path.suffix.lower() in RTL_SUFFIXES or not path.is_file()):
+                raise ValueError('readiness build file must be an existing project filelist outside frozen inputs/tests')
+        result[key] = list(values)
+    if result['build_files'] and not result['region_roots']:
+        raise ValueError('readiness build files require an explicit regional opt-in')
+    if (result['region_roots'] and (out / 'work/RTL_STRUCTURE.json').exists()
+            and 'RTL_STRUCTURE.json' not in result['build_files']):
+        raise ValueError('regional readiness with live RTL_STRUCTURE.json requires it in build_files; '
+                         'the compile declaration must travel with the complete candidate')
+    return result
+
+
+def source_inventory(base, build_files=()):
+    """Hash RTL/header inputs plus explicitly declared project build file bytes."""
     rtl = base / 'rtl'
     if not rtl.is_dir() or rtl.is_symlink():
         raise ValueError('readiness requires an existing plain work/rtl source closure')
@@ -81,6 +113,11 @@ def source_inventory(base):
             result[name] = dict(sha256=sha(path), size=path.stat().st_size, mode=path.stat().st_mode & 0o777)
     if not result:
         raise ValueError('readiness RTL source closure is empty')
+    for name in build_files:
+        path = owned(base, name)
+        if not path.is_file() or path.suffix.lower() in RTL_SUFFIXES:
+            raise ValueError('readiness declared build file is unavailable: ' + name)
+        result[name] = dict(sha256=sha(path), size=path.stat().st_size, mode=path.stat().st_mode & 0o777)
     return result
 
 
@@ -152,11 +189,14 @@ def begin(out, request, require_idle):
     limits = settings(out)
     if not (out / 'snapshot/harness/skills/rtl-implementation-readiness/scripts/readiness.py').is_file():
         return {'state': 'skill_unavailable', 'reused': True, 'campaign': None}
-    source = source_inventory(out / 'work')
+    policy = regional_policy(out)
+    source = source_inventory(out / 'work', policy['build_files'])
     fingerprint = digest(source)
     previous = campaigns(out)
     for value in reversed(previous):
         if fingerprint in (value['source_sha256'], value.get('adopted_source_sha256')):
+            if any(value.get(key, []) != policy[key] for key in ('region_roots', 'build_files')):
+                raise ValueError('readiness campaign regional policy changed')
             return status(out, {'campaign': value['campaign']}, reused=True)
         if value['state'] == 'active':
             raise ValueError('readiness baseline changed during active campaign')
@@ -168,7 +208,7 @@ def begin(out, request, require_idle):
     scope = 'readiness/' + name
     (out / scope / 'work').mkdir(parents=True, exist_ok=False)
     (out / scope / 'audit').mkdir()
-    value = dict(version=1, campaign=name, work_scope=scope + '/work', audit_scope=scope + '/audit',
+    value = dict(version=1, **policy, campaign=name, work_scope=scope + '/work', audit_scope=scope + '/audit',
                  baseline_path='work', state='active', source_sha256=fingerprint, source_files=source,
                  budgets=limits, created_utc=now(), result_path=scope + '/work/result.json',
                  review_path=scope + '/audit/review.json')
@@ -177,7 +217,7 @@ def begin(out, request, require_idle):
 
 
 def check_baseline(out, value):
-    if source_inventory(out / 'work') != value['source_files']:
+    if source_inventory(out / 'work', value.get('build_files', [])) != value['source_files']:
         raise ValueError('readiness original RTL baseline changed')
 
 
@@ -352,7 +392,7 @@ def _finalize_paths(out, campaign, request, manifest, script):
         raise ValueError('finalize requires an explicit workspace')
     options = {}
     repeat = {'--baseline-job', '--candidate-job', '--verification-job'}
-    known = repeat | {'--variant', '--metric', '--min-ratio', '--min-repeats', '--out'}
+    known = repeat | {'--variant', '--metric', '--min-ratio', '--min-repeats', '--health', '--out'}
     position = 1
     while position < len(arguments):
         key, separator, value = arguments[position].partition('=')
@@ -385,7 +425,12 @@ def _finalize_paths(out, campaign, request, manifest, script):
         return owned(base, str(item.relative_to(base)))
     workspace, delivery = path(arguments[0]), path(options['--out'][0])
     delivery.relative_to(workspace)
-    return workspace, delivery
+    health = path(options['--health'][0]) if '--health' in options else None
+    if health is not None:
+        health.relative_to(workspace)
+        if not health.is_file():
+            raise ValueError('finalize health report must be an existing regular workspace file')
+    return workspace, delivery, health
 
 
 def _evidence_identity(workspace, delivery, verified):
@@ -407,8 +452,13 @@ def _evidence_identity(workspace, delivery, verified):
     for key in ('workspace_id', 'baseline_identity', 'variant_identity', 'decision', 'reason'):
         if comparison.get(key) != verified[key]:
             raise ValueError('freshly read comparison differs from verified ' + key)
+    if comparison.get('health_report') != verified.get('health_report'):
+        raise ValueError('freshly read comparison differs from verified health report')
     sources = {key: verified[key] for key in ('workspace_id', 'baseline_identity', 'variant_identity',
                                              'files', 'baseline_files', 'allowed_paths', 'changes')}
+    for key in ('region_roots', 'build_files', 'build', 'baseline_build', 'operations'):
+        if key in verified:
+            sources[key] = verified[key]
     stable = {key: value for key, value in comparison.items() if key not in ('created_utc', 'identity')}
     return digest({'workspace': str(workspace), 'comparison': stable, 'sources': sources})
 
@@ -453,8 +503,14 @@ def _resolve_job(out, campaign, job_id, manifest, script):
             raise ValueError('verified batch finalization delivery must be absolute')
         delivery = owned(workspace, str(raw_delivery.relative_to(workspace)))
     else:
-        workspace, delivery = _finalize_paths(out, campaign, request, manifest, script)
+        workspace, delivery, health = _finalize_paths(out, campaign, request, manifest, script)
+        health_reference = {'path': str(health), 'sha256': sha(health)} if health is not None else None
         verified = verify_finalization(out, workspace, delivery)
+        # The frozen helper validates the report's source/checker/evidence
+        # bindings. The controller also binds that fresh proof to the exact
+        # report selected by this native job, rather than ignoring --health.
+        if verified.get('health_report') != health_reference:
+            raise ValueError('verified finalization health report differs from its native command')
     comparison, finalization = delivery / 'comparison.json', delivery / 'finalization.json'
     for key, expected_path in (('workspace', workspace), ('delivery', delivery),
                                ('comparison', comparison), ('finalization_path', finalization)):
@@ -573,38 +629,208 @@ def _require_actor(out, session_id, role, scope):
     return result
 
 
-def integration_updates(out, campaign, verified, *, check_live_baseline=True):
-    """Bind a verified positive proposal to original campaign RTL before delivery.
+def _regional_compile_declaration(out, campaign, verified, tree):
+    """Bind the project's native declaration to the complete regional build.
 
-    Completed handoff receipts remain verifiable after adoption: their immutable
-    source metadata still binds to the campaign, while live work may be the
-    adopted variant. The adoption path retains its original live-byte check.
+    This validates declaration inputs without running EDA or accepting structure
+    evidence. All defines/parameters stay in the native normalized configuration
+    and in the unchanged publication bytes; independent RTL audit still owns the
+    complete compile contract and structural release decision.
     """
+    name = 'RTL_STRUCTURE.json'
+    if name not in campaign['source_files'] and not (out / 'work' / name).exists():
+        return
+    if name not in campaign.get('build_files', []):
+        raise ValueError('regional readiness with live RTL_STRUCTURE.json requires it in build_files; '
+                         'the compile declaration must travel with the complete candidate')
+    path = owned(tree, name)
+    entry = verified['files'].get(name, {})
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        raise ValueError('regional candidate is missing RTL_STRUCTURE.json compile declaration') from None
+    if hashlib.sha256(raw).hexdigest() != entry.get('sha256') or len(raw) != entry.get('size'):
+        raise ValueError('regional candidate RTL_STRUCTURE.json identity changed')
+    declaration = json.loads(raw)
+    if (not isinstance(declaration, dict) or set(declaration) != {'version', 'configurations', 'blackboxes'}
+            or type(declaration.get('version')) is not int or declaration['version'] != 1
+            or not isinstance(declaration['configurations'], list) or not declaration['configurations']
+            or not isinstance(declaration['blackboxes'], list)):
+        raise ValueError('invalid regional RTL_STRUCTURE.json compile declaration schema')
+    from harness.runtime import rtl_structure, rtl_structure_gate
+    tools = json.loads((out / 'manifest.json').read_text())['settings']['tools']
+    identifiers, configurations = set(), set()
+    matching = False
+    for item in declaration['configurations']:
+        if (not isinstance(item, dict) or set(item) - (rtl_structure_gate.CONFIGURATION_FIELDS | {'id'})
+                or not isinstance(item.get('id'), str) or not item['id'].strip()
+                or len(item['id']) > 128 or item['id'] in identifiers):
+            raise ValueError('invalid or duplicate regional compile declaration configuration')
+        try:
+            normalized = rtl_structure.normalize_config(tree.resolve(), {
+                **{key: value for key, value in item.items() if key != 'id'},
+                'version': 2, 'tool_path': tools['yosys'], 'lint_tool_path': tools.get('verilator'),
+                'timeout_seconds': 600, 'binding': {}})
+        except (OSError, ValueError, TypeError) as error:
+            raise ValueError('regional RTL_STRUCTURE.json compile configuration is invalid: ' + str(error)) from error
+        key = digest({name: normalized[name] for name in rtl_structure_gate.CONFIGURATION_FIELDS})
+        if key in configurations:
+            raise ValueError('duplicate semantic regional compile declaration configuration')
+        identifiers.add(item['id']); configurations.add(key)
+        matching = matching or all(normalized[key] == verified['build'][key]
+                                   for key in ('top', 'sources', 'include_dirs'))
+    if not matching:
+        raise ValueError('regional RTL_STRUCTURE.json has no configuration matching the verified '
+                         'candidate top, ordered sources and include_dirs')
+
+
+def integration_updates(out, campaign, verified, *, check_live_baseline=True):
+    """Validate an entire source/build proposal before any live implementation edit."""
     allowed = verified['allowed_paths']; changes = verified['changes']
+    regional = 'operations' in verified
     if (not isinstance(allowed, list) or not isinstance(changes, list) or not changes
             or any(not isinstance(name, str) for name in allowed + changes)
-            or len(set(changes)) != len(changes) or not set(changes).issubset(allowed)):
+            or len(set(allowed)) != len(allowed) or len(set(changes)) != len(changes)):
         raise ValueError('verified readiness change set is invalid')
     tree = Path(verified['candidate_tree'])
     tree.resolve().relative_to((out / campaign['work_scope']).resolve())
+    baseline_files, files = verified['baseline_files'], verified['files']
     for name in allowed:
         baseline = campaign['source_files'].get(name)
         original = owned(out / 'work', name)
-        if (not baseline or original.suffix.lower() not in RTL_SUFFIXES or not original.is_file()
-                or verified['baseline_files'].get(name, {}).get('sha256') != baseline['sha256']
-                or (check_live_baseline and sha(original) != baseline['sha256'])):
+        if (not baseline or original.suffix.lower() not in RTL_SUFFIXES
+                or baseline_files.get(name, {}).get('sha256') != baseline['sha256']
+                or (check_live_baseline and (not original.is_file() or sha(original) != baseline['sha256']))):
             raise ValueError('allowed RTL has no matching original baseline: ' + str(name)
                              + '; probe-only evidence cannot be integrated. Compare and verify a candidate '
                              'bound to original RTL paths and source hashes, or report an honest probe-only outcome')
-    updates = {}
-    for name in changes:
+    operations = dict(add=[], modify=list(changes), delete=[])
+    if regional:
+        roots, build_files = campaign.get('region_roots', []), campaign.get('build_files', [])
+        if (not roots or verified.get('region_roots') != roots or verified.get('build_files') != build_files):
+            raise ValueError('regional readiness proposal differs from explicit campaign policy')
+        operations = verified['operations']
+        if (not isinstance(operations, dict) or set(operations) != {'add', 'modify', 'delete'}
+                or any(not isinstance(v, list) or any(not isinstance(n, str) for n in v)
+                       or v != sorted(set(v)) for v in operations.values())):
+            raise ValueError('invalid regional file operations')
+        actual = {'add': sorted(set(files) - set(baseline_files)),
+                  'delete': sorted(set(baseline_files) - set(files)),
+                  'modify': sorted(n for n in set(files) & set(baseline_files)
+                                   if files[n] != baseline_files[n])}
+        if operations != actual or changes != sorted(n for values in operations.values() for n in values):
+            raise ValueError('regional file operations differ from verified manifests')
+        for name in build_files:
+            baseline = campaign['source_files'].get(name)
+            original = owned(out / 'work', name)
+            if (not baseline or baseline_files.get(name, {}).get('sha256') != baseline['sha256']
+                    or (check_live_baseline and (not original.is_file() or sha(original) != baseline['sha256']))):
+                raise ValueError('regional build file has no matching original baseline: ' + name)
+        if any(name not in allowed + build_files for name in operations['modify']):
+            raise ValueError('regional modifications exceed original RTL/build policy')
+        if any(name not in allowed or Path(name).suffix.lower() not in RTL_SUFFIXES
+               for name in operations['delete']):
+            raise ValueError('regional deletion requires owned original RTL')
+        for name in operations['add']:
+            path = owned(out / 'work', name)
+            if (path.suffix.lower() not in RTL_SUFFIXES
+                    or not any(Path(name).is_relative_to(Path(root)) for root in roots)
+                    or (check_live_baseline and path.exists())):
+                raise ValueError('regional addition exceeds authorized RTL roots: ' + name)
+        for key in ('build', 'baseline_build'):
+            build = verified.get(key)
+            if (not isinstance(build, dict) or set(build) != {'top', 'sources', 'include_dirs'}
+                    or not isinstance(build['top'], str) or not build['top']
+                    or any(not isinstance(build[k], list) or any(not isinstance(n, str) for n in build[k])
+                           for k in ('sources', 'include_dirs'))):
+                raise ValueError('regional proposal lacks verified ' + key)
+        if verified['build']['top'] != verified['baseline_build']['top']:
+            raise ValueError('regional proposal changed frozen top')
+        if verified['build']['include_dirs'] != verified['baseline_build']['include_dirs']:
+            raise ValueError('changed regional include_dirs requires an actual project build configuration adapter for adoption')
+        if verified['build'] != verified['baseline_build'] and not build_files:
+            raise ValueError('changed regional build requires a declared project filelist for adoption')
+        _regional_compile_declaration(out, campaign, verified, tree)
+    elif not set(changes).issubset(allowed):
+        raise ValueError('verified readiness change set is invalid')
+    updates = {name: None for name in operations['delete']}
+    for name in operations['add'] + operations['modify']:
         variant = owned(tree, name)
         raw = variant.read_bytes()
-        entry = verified['files'].get(name, {})
+        entry = files.get(name, {})
         if hashlib.sha256(raw).hexdigest() != entry.get('sha256') or len(raw) != entry.get('size'):
             raise ValueError('verified candidate RTL changed: ' + name)
         updates[name] = raw
     return updates
+
+
+def _publish_updates(out, campaign, updates):
+    """Stage all bytes, journal intent, then publish or roll back under controller idle ownership.
+
+    This is a multi-file transaction, not a filesystem-wide atomic replacement.
+    A process crash leaves its durable journal for explicit recovery; it never
+    triggers an automatic model retry or synthesis launch.
+    """
+    base = out / 'work'
+    journal = metadata_path(out, campaign['campaign']).with_suffix('.publication.json')
+    if journal.exists():
+        raise ValueError('readiness publication journal already exists; inspect recovery state')
+    with journal.open('x') as claim:
+        json.dump({'state': 'staging', 'campaign': campaign['campaign']}, claim)
+    transaction = Path(tempfile.mkdtemp(prefix='.publication-', dir=out / campaign['work_scope']))
+    originals = {}
+    created_dirs = []
+    try:
+        for index, (name, raw) in enumerate(updates.items()):
+            target = owned(base, name)
+            originals[name] = {'exists': target.is_file(), 'mode': target.stat().st_mode & 0o777 if target.exists() else None}
+            if target.exists():
+                shutil.copyfile(target, transaction / ('original-' + str(index)))
+            if raw is not None:
+                (transaction / ('update-' + str(index))).write_bytes(raw)
+        save(journal, {'state': 'prepared', 'transaction': str(transaction.relative_to(out)),
+                       'files': originals, 'operations': {n: 'delete' if v is None else 'write' for n, v in updates.items()}})
+        try:
+            for index, (name, raw) in enumerate(updates.items()):
+                target = owned(base, name)
+                if raw is None:
+                    target.unlink()
+                else:
+                    missing = []
+                    parent = target.parent
+                    while not parent.exists():
+                        missing.append(parent); parent = parent.parent
+                    for parent in reversed(missing):
+                        parent.mkdir(); created_dirs.append(parent)
+                    staged = transaction / ('update-' + str(index))
+                    staged.chmod(originals[name]['mode'] if originals[name]['exists'] else 0o644)
+                    staged.replace(target)
+            save(journal, {'state': 'committed', 'transaction': str(transaction.relative_to(out)), 'files': originals})
+        except BaseException:
+            errors = []
+            for index, (name, original) in reversed(list(enumerate(originals.items()))):
+                try:
+                    target = owned(base, name)
+                    if original['exists']:
+                        backup = transaction / ('original-' + str(index))
+                        backup.chmod(original['mode']); backup.replace(target)
+                    elif target.exists():
+                        target.unlink()
+                except OSError as error:
+                    errors.append(str(error))
+            for path in reversed(created_dirs):
+                try:
+                    path.rmdir()
+                except OSError:
+                    pass
+            save(journal, {'state': 'rollback_failed' if errors else 'rolled_back',
+                           'transaction': str(transaction.relative_to(out)), 'files': originals,
+                           'rollback_errors': errors})
+            raise
+    finally:
+        # Keep the small journal and backups for explicit recovery/provenance.
+        # Never delete backups after an interrupted or unsuccessful publication.
+        pass
 
 
 def complete(out, request, require_idle):
@@ -661,19 +887,21 @@ def complete(out, request, require_idle):
             updates = integration_updates(out, value, verified)
             check_baseline(out, value)
             receipt.update(verification=verified, review_path=str(review_path.relative_to(out)), review_sha256=sha(review_path))
-            originals = {name: (out / 'work' / name).read_bytes() for name in updates}
-            try:
-                for name, raw in updates.items():
-                    target = out / 'work' / name
-                    temporary = target.with_name(target.name + '.readiness.tmp')
-                    temporary.write_bytes(raw); temporary.chmod(value['source_files'][name]['mode']); temporary.replace(target)
-            except BaseException:
-                for name, raw in originals.items():
-                    (out / 'work' / name).write_bytes(raw)
-                raise
-            receipt.update(adopted=True, changed_files={name: sha(out / 'work' / name) for name in updates},
-                           scope='provisional implementation RTL; independent downstream RTL audit required')
-            value['adopted_source_sha256'] = digest(source_inventory(out / 'work'))
+            _publish_updates(out, value, updates)
+            receipt.update(adopted=True, changed_files={name: sha(out / 'work' / name)
+                                                      for name, raw in updates.items() if raw is not None},
+                           deleted_files=sorted(name for name, raw in updates.items() if raw is None),
+                           scope='provisional implementation RTL/build; independent downstream RTL audit required')
+            if 'operations' in verified:
+                receipt.update(operations=verified['operations'], build=verified['build'], baseline_build=verified['baseline_build'],
+                               region_roots=verified['region_roots'], build_files=verified['build_files'])
+                value['adopted_build_sha256'] = digest(verified['build'])
+            value['adopted_source_sha256'] = digest(source_inventory(out / 'work', value.get('build_files', [])))
+            if 'operations' in verified:
+                value['adopted_source_build_sha256'] = digest({'files': source_inventory(out / 'work', value.get('build_files', [])),
+                                                               'build': verified['build']})
+                receipt.update(adopted_build_sha256=value['adopted_build_sha256'],
+                               adopted_source_build_sha256=value['adopted_source_build_sha256'])
             value['state'] = 'adopted'
         else:
             if verified is not None:

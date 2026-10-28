@@ -25,7 +25,7 @@ import uuid
 from typing import Any
 
 from core import (ReadinessError, digest, load_variant, load_workspace, read_json,
-                  safe_relative, save_json, sha, under, utc_now, variant_tree)
+                  safe_relative, save_json, sha, under, utc_now, variant_build, variant_tree)
 
 
 TERMINAL = {"completed", "failed", "timeout", "incomplete"}
@@ -224,16 +224,18 @@ def _request(workspace: Path, variant: str, config: dict[str, Any]) -> dict[str,
     ws = load_workspace(workspace)
     selected = load_variant(workspace, variant, verify=True)
     normalized, tool, inputs = _config(config)
-    top = ws.get("top")
+    build = variant_build(ws, selected)
+    top = build.get("top")
     if not isinstance(top, str) or not _IDENTIFIER.fullmatch(top):
         raise ReadinessError("Yosys experiments currently require an unescaped top identifier")
-    sources = [safe_relative(item) for item in ws.get("sources", [])]
-    includes = [safe_relative(item) if item != "." else "." for item in ws.get("include_dirs", [])]
+    sources = [safe_relative(item) for item in build.get("sources", [])]
+    includes = [safe_relative(item) if item != "." else "." for item in build.get("include_dirs", [])]
     if not sources:
         raise ReadinessError("workspace has no source list")
     pair = normalized["kind"] == "equiv" or (
         normalized["kind"] == "command"
-        and any("{baseline_tree}" in item for item in normalized["argv"]))
+        and any("{baseline_tree}" in item or (ws["api_version"] == 3 and "{baseline_build}" in item)
+                for item in normalized["argv"]))
     baseline = load_variant(workspace, str(normalized.get("baseline", "baseline")), verify=True) if pair else None
     verification = {"config": normalized, "workspace_id": ws["workspace_id"], "top": top, "sources": sources,
                     "include_dirs": includes, "tool": tool, "input_files": inputs}
@@ -249,8 +251,58 @@ def _request(workspace: Path, variant: str, config: dict[str, Any]) -> dict[str,
         "verification_identity": digest(verification),
         "measurement_key": digest(verification),
     }
+    if ws["api_version"] == 3:
+        # A region refactor may change the ordered file list while measuring the
+        # same target and observable boundary. Bind each actual build separately;
+        # do not make identical file lists a condition for cost comparison.
+        baseline_build = variant_build(ws, baseline) if baseline else None
+        scope = {key: value for key, value in verification.items()
+                 if key not in ("sources", "include_dirs")}
+        request.update(api_version=3, build=build, baseline_build=baseline_build,
+                       measurement_key=digest(scope),
+                       verification_identity=digest({**scope, "build": build,
+                                                     "baseline_build": baseline_build}))
     request["request_identity"] = digest(request)
     return request
+
+
+def _verify_request_builds(workspace: Path, request: dict[str, Any]) -> None:
+    """Recheck build metadata against sealed inputs, including terminal receipts."""
+    ws = load_workspace(workspace)
+    if ws["api_version"] != 3:
+        if request.get("api_version") != 2:
+            raise ReadinessError("Experiment request/workspace version mismatch")
+        return
+    if request.get("api_version") != 3:
+        raise ReadinessError("Regional workspace requires source-bound build metadata")
+    selected = load_variant(workspace, request["variant"])
+    build = variant_build(ws, selected)
+    if (request.get("build") != build
+            or request.get("variant_files") != selected["files"]
+            or any(request.get(key) != build[key] for key in ("top", "sources", "include_dirs"))):
+        raise ReadinessError("Experiment build no longer matches the sealed candidate")
+    baseline = load_variant(workspace, request["baseline"]) if request.get("baseline_identity") else None
+    baseline_build = variant_build(ws, baseline) if baseline else None
+    if request.get("baseline_build") != baseline_build:
+        raise ReadinessError("Experiment baseline build no longer matches the sealed baseline")
+    if request.get("baseline_files") != (baseline["files"] if baseline else None):
+        raise ReadinessError("Experiment baseline files no longer match the sealed baseline")
+    verification = {"config": request["config"], "workspace_id": ws["workspace_id"],
+                    "top": build["top"], "tool": request["tool"],
+                    "input_files": request["input_files"]}
+    if (request.get("measurement_key") != digest(verification)
+            or request.get("verification_identity") != digest(
+                {**verification, "build": build, "baseline_build": baseline_build})):
+        raise ReadinessError("Experiment build or measurement scope binding changed")
+
+
+def _verify_job_builds(request: dict[str, Any], job: Path) -> None:
+    if request.get("api_version") != 3:
+        return
+    if read_json(job / "build.json") != request["build"]:
+        raise ReadinessError("Experiment build manifest changed")
+    if request.get("baseline_build") and read_json(job / "baseline-build.json") != request["baseline_build"]:
+        raise ReadinessError("Experiment baseline build manifest changed")
 
 
 def _active_jobs(workspace: Path) -> list[str]:
@@ -383,19 +435,27 @@ def _quote(path: Path | str) -> str:
 
 
 def _read_design(request: dict[str, Any], tree: Path) -> list[str]:
+    build = _request_build(request, baseline=tree.name == "baseline_tree")
     options = ["read_verilog", "-sv"]
     # Yosys preserves quotes in option tokens. Paths with spaces therefore use
     # deterministic, space-free aliases OUTSIDE the frozen source tree. The
     # frontend cwd is work/tree for both stage and pair experiments.
     options += [f"-I../include_paths/{tree.name}/{index}"
-                for index, _ in enumerate(request["include_dirs"])]
+                for index, _ in enumerate(build["include_dirs"])]
     options += ["-D" + item for item in request["config"].get("defines", [])]
-    options += [_quote(under(tree, item)) for item in request["sources"]]
+    options += [_quote(under(tree, item)) for item in build["sources"]]
     commands = [" ".join(options)]
     for key, value in sorted(request["config"].get("parameters", {}).items()):
-        commands.append(f"chparam -set {key} {value} {request['top']}")
-    commands.append(f"hierarchy -check -top {request['top']}")
+        commands.append(f"chparam -set {key} {value} {build['top']}")
+    commands.append(f"hierarchy -check -top {build['top']}")
     return commands
+
+
+def _request_build(request: dict[str, Any], *, baseline: bool = False) -> dict[str, Any]:
+    # Historical API2 receipts share one build on both sides. Never rewrite them.
+    if request.get("api_version") == 3:
+        return request["baseline_build" if baseline else "build"]
+    return {key: request[key] for key in ("top", "sources", "include_dirs")}
 
 
 def _prepare_include_aliases(request: dict[str, Any], job: Path) -> list[dict[str, str]]:
@@ -404,7 +464,8 @@ def _prepare_include_aliases(request: dict[str, Any], job: Path) -> list[dict[st
     if request.get("baseline_identity"):
         trees.append(job / "work" / "baseline_tree")
     for tree in trees:
-        for index, relative in enumerate(request["include_dirs"]):
+        build = _request_build(request, baseline=tree.name == "baseline_tree")
+        for index, relative in enumerate(build["include_dirs"]):
             target = tree if relative == "." else under(tree, relative)
             alias = job / "work" / "include_paths" / tree.name / str(index)
             alias.parent.mkdir(parents=True, exist_ok=True)
@@ -472,6 +533,10 @@ def _copy_variant(workspace: Path, name: str, identity: str, files: dict[str, An
         destination = under(target, relative)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
+    ws = load_workspace(workspace)
+    if ws["api_version"] == 3:
+        for relative in variant_build(ws, current)["include_dirs"]:
+            under(target, relative).mkdir(parents=True, exist_ok=True)
     _verify_files(target, files)
 
 
@@ -718,6 +783,7 @@ def worker(job_dir: Path) -> int:
             unsigned = {key: value for key, value in request.items() if key not in {"request_identity", "job_id"}}
             if digest(unsigned) != request["request_identity"]:
                 raise ReadinessError("request contents changed")
+            _verify_request_builds(workspace, request)
             for item in [request["tool"], *request["input_files"]]:
                 if sha(Path(item["path"])) != item["sha256"]:
                     raise ReadinessError("tool or verification input changed since submission")
@@ -725,18 +791,25 @@ def worker(job_dir: Path) -> int:
             if request.get("baseline_identity"):
                 _copy_variant(workspace, request["baseline"], request["baseline_identity"], request["baseline_files"], job / "work" / "baseline_tree")
             copied = True
+            if request.get("api_version") == 3:
+                save_json(job / "build.json", request["build"])
+                if request.get("baseline_build"):
+                    save_json(job / "baseline-build.json", request["baseline_build"])
             if request["config"]["kind"] == "equiv":
                 # Frontends resolve literal readmem paths against process cwd. Until
                 # separate per-tree elaboration exists, never accidentally use the
                 # candidate's init data while claiming a baseline/candidate proof.
-                for folder in (job / "work" / "tree", job / "work" / "baseline_tree"):
-                    for relative in request["variant_files"]:
+                for folder, files in ((job / "work" / "tree", request["variant_files"]),
+                                      (job / "work" / "baseline_tree", request["baseline_files"])):
+                    for relative in files:
                         if re.search(rb"\$readmem[hb]\b", under(folder, relative).read_bytes()):
                             raise ReadinessError("equiv with readmem is unsupported; use a separately bound pair command")
             if request["config"]["kind"] == "command":
                 argv = [item.replace("{tree}", str(job / "work" / "tree")).replace(
                     "{baseline_tree}", str(job / "work" / "baseline_tree")).replace(
-                    "{job}", str(job)) for item in request["config"]["argv"]]
+                    "{job}", str(job)).replace("{build}", str(job / "build.json")).replace(
+                    "{baseline_build}", str(job / "baseline-build.json"))
+                    for item in request["config"]["argv"]]
             else:
                 aliases = _prepare_include_aliases(request, job)
                 script = _yosys_script(request, job)
@@ -789,6 +862,8 @@ def worker(job_dir: Path) -> int:
                     checked = load_variant(workspace, request["baseline"], verify=True)
                     if checked["identity"] != request["baseline_identity"]:
                         raise ReadinessError("sealed baseline identity changed during experiment")
+                _verify_request_builds(workspace, request)
+                _verify_job_builds(request, job)
             for item in [request["tool"], *request["input_files"]]:
                 if sha(Path(item["path"])) != item["sha256"]:
                     raise ReadinessError("tool or verification input changed during experiment")

@@ -11,7 +11,7 @@ def _sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _reviewed_work(out, receipt, adopted):
+def _reviewed_work(out, receipt, adopted, removed=()):
     """Recognize formal repair state without relabeling the imported source pins."""
     from harness.runtime.rtl_worker import (
         closure_inventory, integrity_guards, reviews, review_status,
@@ -26,9 +26,15 @@ def _reviewed_work(out, receipt, adopted):
     # The formal loop must start from this imported/adopted closure, not an
     # unrelated review tree merely present in the run.
     first = history[0]['work_inventory']
-    for rel, entry in receipt['selected_files'].items():
+    initial = {rel: entry['sha256'] for rel, entry in receipt['selected_files'].items()}
+    initial.update(adopted)
+    for rel in removed:
+        if rel in first:
+            raise ValueError('formal review does not descend from the adopted deletion: ' + rel)
+        initial.pop(rel, None)
+    for rel, expected_sha in initial.items():
         frozen = first.get(rel, {})
-        if frozen.get('type') != 'file' or frozen.get('sha256') != adopted.get(rel, entry['sha256']):
+        if frozen.get('type') != 'file' or frozen.get('sha256') != expected_sha:
             raise ValueError('formal review does not descend from the imported seed: ' + rel)
     latest = history[-1]
     review_status(out, latest)
@@ -59,18 +65,41 @@ def seed(out, req):
         if digest(request) != receipt['request_identity'] or digest(receipt['selected_files']) != receipt['selected_closure_sha256']:
             raise ValueError('imported seed receipt changed')
         adopted = {}
-        for path in sorted((out / 'readiness').glob('campaign-*.adoption.json')):
+        removed = set()
+        frozen_assets = set()
+        adoption_paths = (out / 'readiness').glob('campaign-*.adoption.json')
+        for path in sorted(adoption_paths, key=lambda p: int(p.name[len('campaign-'):-len('.adoption.json')])):
             value = json.loads(path.read_text())
             if value.get('adopted') is True:
-                adopted.update(value['changed_files'])
-        reviewed, active_repair = _reviewed_work(out, receipt, adopted)
-        for rel, entry in receipt['selected_files'].items():
-            path = out / 'work' / rel
-            expected = adopted.get(rel, entry['sha256'])
-            if rel.startswith('rtl/') and reviewed:
+                operations = value.get('operations', {})
+                for rel in operations.get('delete', []):
+                    removed.add(rel)
+                    adopted.pop(rel, None)
+                for rel, expected_sha in value['changed_files'].items():
+                    adopted[rel] = expected_sha
+                    removed.discard(rel)
+                frozen_assets.update(value.get('verification', {}).get('frozen_assets', []))
+        reviewed, active_repair = _reviewed_work(out, receipt, adopted, removed)
+        from harness.runtime.rtl_readiness import regional_policy, owned
+        build_files = regional_policy(out)['build_files'] if (out / 'manifest.json').is_file() else []
+        expected_files = {rel: entry['sha256'] for rel, entry in receipt['selected_files'].items()}
+        expected_files.update(adopted)
+        for rel in sorted(set(expected_files) | removed):
+            path = owned(out / 'work', rel)
+            expected = None if rel in removed else expected_files[rel]
+            editable = (rel.startswith('rtl/') or rel in build_files) and rel not in frozen_assets
+            mutable = editable and active_repair
+            if editable and reviewed:
                 expected = reviewed.get(rel, {}).get('sha256')
-            mutable = rel.startswith('rtl/') and active_repair
-            if path.is_symlink() or not path.is_file() or (not mutable and _sha(path) != expected):
+            if path.is_symlink() or (path.exists() and not path.is_file()):
+                raise ValueError('imported seed or adopted source changed: ' + rel)
+            if mutable:
+                continue
+            if expected is None:
+                if path.exists():
+                    raise ValueError('imported seed or adopted source changed: ' + rel)
+                continue
+            if not path.is_file() or _sha(path) != expected:
                 raise ValueError('imported seed or adopted source changed: ' + rel)
         return receipt
     source = Path(req['source_work'])

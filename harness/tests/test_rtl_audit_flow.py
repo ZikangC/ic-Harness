@@ -48,13 +48,15 @@ class Remote:
         elif action == 'status':
             return self.job_results.get(req['job_id'], {'job_id': req['job_id'], 'status': 'completed', 'exit_code': 0})
         elif action == 'rtl_review_begin':
+            selected_scope = req.get('review_scope', self.current.get('review_scope', 'candidate')
+                                     if req.get('seed_review') else 'candidate')
             self.number += 1
             n = self.number
             self.current = {'review': f'review-{n}', 'audit_scope': f'audit/review-{n}',
                             'candidate_scope': f'rtl/candidates/candidate-{n}/work',
                             'architecture_scope': f'rtl/candidates/candidate-{n}/architecture',
-                            'candidate_sha256': f'candidate-{n}', 'decision': None,
-                            'repair': None, 'architecture_current': True}
+                            'candidate_sha256': f'candidate-{n}', 'review_scope': selected_scope, 'decision': None,
+                            'repair': None, 'architecture_current': True, 'evidence_sha256': 'empty-native-records'}
             scope = self.current['architecture_scope']
             entries = {name: {'type': 'file', 'sha256': sha256(text.encode()).hexdigest(), 'mode': 0o644}
                        for name, text in self.architecture_texts.items()}
@@ -90,6 +92,7 @@ class Remote:
 
     def decide(self, verdict):
         self.current['decision'] = {'verdict': verdict,
+                                   'review_scope': self.current.get('review_scope', 'candidate'),
                                    'report_path': self.current['audit_scope'] + '/review.json',
                                    'report_sha256': 'actual-report-hash'}
 
@@ -120,6 +123,7 @@ class FlowTests(unittest.TestCase):
         remote.evidence('rtl-audit/review-1.audit.json', json.dumps({
             'completed': True, 'tool_isolation_ok': True,
             'candidate_sha256': remote.current['candidate_sha256'],
+            'review_scope': remote.current['review_scope'],
             'decision_report_sha256': remote.current['decision']['report_sha256']}))
 
     def test_audit_skill_alone_can_complete_one_review_without_implementation(self):
@@ -288,6 +292,7 @@ class FlowTests(unittest.TestCase):
         self.remote.evidence('rtl-audit/review-1.repair.json', json.dumps({
             'completed': True, 'tool_isolation_ok': True, 'repair_actor': 'another-owner',
             'candidate_sha256': self.remote.current['candidate_sha256'],
+            'review_scope': self.remote.current['review_scope'],
             'decision_report_sha256': self.remote.current['decision']['report_sha256']}))
         with patch.object(flow, 'run_session', side_effect=AssertionError('wrong actor resumed')):
             result = flow.run(self.context, self.remote, repair_handler=implementation_repair, max_repairs=1)
@@ -443,6 +448,7 @@ class FlowTests(unittest.TestCase):
                         remote.evidence('rtl-audit/review-1.audit.json', json.dumps({
                             'completed': True, 'tool_isolation_ok': True,
                             'candidate_sha256': remote.current['candidate_sha256'],
+                            'review_scope': remote.current['review_scope'],
                             'decision_report_sha256': remote.current['decision']['report_sha256']}))
                     if fault == 'missing_task':
                         context.pop('task')
@@ -542,12 +548,13 @@ class FlowTests(unittest.TestCase):
         self.assertFalse(result['rtl_stage_release'])
         self.assertEqual(result['review'], 'review-2')
 
-    def test_blocked_resume_starts_new_review_without_overwriting_old_scope(self):
+    def test_new_evidence_after_blocked_starts_new_review_without_overwriting_old_scope(self):
         def blocked(*args):
             self.remote.decide('blocked')
             return {'completed': True, 'tool_isolation_ok': True}
         with patch.object(flow, 'run_session', side_effect=blocked):
             first = run_implementation_flow(self.context, self.remote)
+        self.remote.current['evidence_sha256'] = 'new-native-record'
         def recovered(*args):
             self.remote.decide('pass')
             return {'completed': True, 'tool_isolation_ok': True}

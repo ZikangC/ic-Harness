@@ -3,6 +3,9 @@ import copy
 import hashlib
 import json
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -51,7 +54,7 @@ class FinalizationTests(unittest.TestCase):
     complete = legacy.ReadinessTests.complete
 
     def finalization(self, campaign, verified, *, delivery='probe/delivery', optional_b=True, equal=False,
-                     created_utc='2026-10-22T00:00:00+00:00', comparison_updates=None):
+                     created_utc='2026-10-22T00:00:00+00:00', comparison_updates=None, health=None):
         base = self.out / campaign['work_scope']
         target = base / delivery
         target.mkdir(parents=True, exist_ok=True)
@@ -59,6 +62,12 @@ class FinalizationTests(unittest.TestCase):
         verified = dict(verified, comparison=str(target / 'comparison.json'),
                         delivery=str(target), finalization_path=str(target / 'finalization.json'),
                         finalization_identity='final-' + delivery)
+        if health is not None:
+            path = Path(health)
+            path = path if path.is_absolute() else base / path
+            reference = {'path': str(path), 'sha256': readiness.sha(path)}
+            verified['health_report'] = reference
+            comparison_updates = dict(comparison_updates or {}, health_report=reference)
         verified = bind_comparison(target, verified, created_utc=created_utc, updates=comparison_updates)
         review_path = self.out / campaign['audit_scope'] / 'review.json'
         review = json.loads(review_path.read_text())
@@ -73,6 +82,8 @@ class FinalizationTests(unittest.TestCase):
             for item in report[field]:
                 argv += [option, item]
         argv += ['--out=' + delivery] if equal else ['--out', delivery]
+        if health is not None:
+            argv += ['--health=' + str(health)] if equal else ['--health', str(health)]
         queued = self.call(action='submit', scope=campaign['work_scope'], argv=argv, timeout_seconds=1)
         job = self.out / 'jobs' / queued['job_id']
         request = json.loads((job / 'request.json').read_text())
@@ -137,6 +148,122 @@ class FinalizationTests(unittest.TestCase):
                 self.assertFalse(self.resolve(campaign, finalization_job_id=job_id)['found'])
                 verify.assert_not_called()
         (job / 'request.json').write_text(json.dumps(original_request))
+
+    def test_health_option_both_syntaxes_resolves_and_binds_fresh_report(self):
+        campaign, verified, _ = self.candidate()
+        base = self.out / campaign['work_scope']
+        health = base / 'probe/health.json'
+        health.write_text('{"fixture":"health semantic verification belongs to the frozen helper"}\n')
+        for equal in (False, True):
+            job, checked = self.finalization(campaign, verified, health='probe/health.json', equal=equal)
+            with patch.object(readiness, 'verify_finalization', return_value=checked) as verify:
+                self.assertTrue(self.resolve(campaign, finalization_job_id=job)['found'])
+            verify.assert_called_with(self.out, base / 'probe', base / 'probe/delivery')
+            for reference in (None, checked['health_report'] | {'sha256': 'wrong'},
+                              checked['health_report'] | {'path': str(base / 'probe/other.json')}):
+                with self.subTest(reference=reference), patch.object(readiness, 'verify_finalization',
+                        return_value=checked | {'health_report': reference}):
+                    result = self.resolve(campaign, finalization_job_id=job)
+                self.assertFalse(result['found'])
+                self.assertIn('health report differs from its native command', result['reason'])
+
+    def test_health_option_rejects_unsafe_missing_duplicate_and_unknown_paths_before_verification(self):
+        campaign, verified, _ = self.candidate()
+        base = self.out / campaign['work_scope']
+        health = base / 'probe/health.json'
+        health.write_text('{}\n')
+        alias = health.with_name('health-alias.json')
+        alias.symlink_to(health)
+        job, checked = self.finalization(campaign, verified)
+        request_path = self.out / 'jobs' / job / 'request.json'
+        original = json.loads(request_path.read_text())
+        cases = [(['--health', raw]) for raw in ('../escape', str(self.out / 'work/outside'),
+                  'health-outside-workspace.json', 'probe/missing.json', 'probe', 'probe/health-alias.json')]
+        (base / 'health-outside-workspace.json').write_text('{}\n')
+        cases += [['--health', 'probe/health.json', '--health=probe/health.json'],
+                  ['--health'], ['--unknown-health', 'probe/health.json']]
+        for options in cases:
+            with self.subTest(options=options), patch.object(readiness, 'verify_finalization') as verify:
+                request_path.write_text(json.dumps(original | {'argv': original['argv'] + options}))
+                self.assertFalse(self.resolve(campaign, finalization_job_id=job)['found'])
+                verify.assert_not_called()
+
+    def test_comparison_health_reference_must_match_fresh_verification(self):
+        campaign, verified, _ = self.candidate()
+        base = self.out / campaign['work_scope']
+        (base / 'probe/health.json').write_text('{}\n')
+        job, verified = self.finalization(campaign, verified, health='probe/health.json')
+        target = base / 'probe/delivery'
+        changed = bind_comparison(target, verified, updates={'health_report':
+                                  verified['health_report'] | {'sha256': 'different'}})
+        with patch.object(readiness, 'verify_finalization', return_value=changed):
+            result = self.resolve(campaign, finalization_job_id=job)
+        self.assertFalse(result['found'])
+        self.assertIn('comparison differs from verified health report', result['reason'])
+
+    def test_real_frozen_helper_consumes_health_and_rejects_report_tampering(self):
+        """Real standalone finalization/verification; only bounded Python commands, no EDA."""
+        campaign = self.begin()
+        base = self.out / campaign['work_scope']
+        scripts = self.out / 'snapshot/harness/skills/rtl-implementation-readiness/scripts'
+        shutil.copytree(Path(__file__).resolve().parents[1] /
+                        'skills/rtl-implementation-readiness/scripts', scripts, dirs_exist_ok=True)
+        manifest = json.loads((self.out / 'manifest.json').read_text())
+        manifest['settings']['tools']['python'] = sys.executable
+        manifest['harness_sha256'] = legacy.inventory(self.out / 'snapshot/harness')
+        (self.out / 'manifest.json').write_text(json.dumps(manifest))
+        script = scripts / 'readiness.py'
+
+        def cli(*args):
+            result = subprocess.run([sys.executable, '-B', str(script), *map(str, args)],
+                                    cwd=base, capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return json.loads(result.stdout)
+
+        cli('init', '--project', self.out / 'work', '--workspace', 'probe', '--top', 'block',
+            '--source', 'rtl/block.sv', '--allow-edit', 'rtl/block.sv')
+        (base / 'overlay/rtl').mkdir(parents=True)
+        (base / 'overlay/rtl/block.sv').write_text('module block; wire x = 1; endmodule\n')
+        cli('variant', 'probe', 'candidate', '--overlay', 'overlay')
+        (base / 'measure.json').write_text(json.dumps({'kind': 'command', 'purpose': 'measurement',
+            'argv': [sys.executable, '-c', 'print("bounded fixture measurement; no RTL tool")'],
+            'timeout_seconds': 5, 'memory_mib': 256}))
+        for variant, job in (('baseline', 'b1'), ('candidate', 'c1')):
+            cli('run', 'probe', '--variant', variant, '--config', 'measure.json', '--job-id', job, '--foreground')
+        cli('health', 'probe', '--variant', 'candidate', '--out', 'probe/health.json')
+        argv = ['python', '-B', '@skill/rtl-implementation-readiness/scripts/readiness.py', 'finalize',
+                'probe', '--variant', 'candidate', '--baseline-job', 'b1', '--candidate-job', 'c1',
+                '--min-repeats', '1', '--health', 'probe/health.json', '--out', 'probe/delivery']
+        cli(*argv[3:])
+        queued = self.call(action='submit', scope=campaign['work_scope'], argv=argv, timeout_seconds=1)
+        job = self.out / 'jobs' / queued['job_id']
+        spec = json.loads((job / 'request.json').read_text())['job_isolation']
+        (job / 'result.json').write_text(json.dumps(dict(exit_code=0, timed_out=False,
+            cleanup_complete=True, container_running=False, elapsed_seconds=.1, job_isolation=spec,
+            candidate_sha256=campaign['source_sha256'], isolation=dict(spec, cleanup_complete=True, container_running=False))))
+        result = self.resolve(campaign, finalization_job_id=queued['job_id'])
+        self.assertTrue(result['found'], result)
+        self.assertEqual(result['report']['decision'], 'evidence_incomplete')
+        # No functional proof was supplied: valid structural plumbing must not
+        # promote this ordinary incomplete comparison to an accepted candidate.
+        health = base / 'probe/health.json'
+        changed = json.loads(health.read_text())
+        changed['variant_identity'] = 'forged'
+        changed['identity'] = hashlib.sha256(json.dumps(
+            {key: value for key, value in changed.items() if key != 'identity'},
+            sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
+        health.write_text(json.dumps(changed))
+        # A self-consistent JSON digest still cannot replace the source-bound
+        # report: the real helper recomputes health from the sealed workspace.
+        forged_argv = argv[3:-1] + ['probe/forged-delivery']
+        rejected = subprocess.run([sys.executable, '-B', str(script), *forged_argv],
+                                  cwd=base, capture_output=True, text=True, timeout=15)
+        self.assertEqual(rejected.returncode, 2)
+        self.assertIn('Structural health report is stale or its evidence changed', rejected.stderr)
+        self.assertFalse((base / 'probe/forged-delivery').exists())
+        result = self.resolve(campaign, finalization_job_id=queued['job_id'])
+        self.assertFalse(result['found'])
+        self.assertIn('standalone finalization verify failed', result['reason'])
 
     def test_path_escape_alias_and_verifier_path_disagreement_are_rejected(self):
         campaign, verified, _ = self.candidate()

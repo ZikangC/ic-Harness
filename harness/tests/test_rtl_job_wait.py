@@ -87,6 +87,7 @@ class StageWaitInterruptTests(unittest.TestCase):
    harness=root/'harness';skills=harness/'skills'
    for name in ('rtl-implementation','rtl-audit'):
     folder=skills/name;folder.mkdir(parents=True);(folder/'SKILL.md').write_text('fixture guidance')
+
    (skills/'manifest.json').write_text(json.dumps({'sha256':stage.inventory(skills)}))
    (root/'project.toml').write_text('[project]\nroot="."\ninput_dir="input"\n[remote]\nssh_host="unused"\n[eda]\npython="unused"\nverilator="unused"\nyosys="unused"\nopenroad="unused"\n')
    (root/'rtl.toml').write_text('')

@@ -1,2 +1,27 @@
-# RTL has no total call or elapsed-time cap. Each submitted tool job has an explicit timeout.
+# Per-tool timeouts remain explicit. Repair rounds are finite and persisted.
 schema_version = 1
+
+[rtl_audit]
+max_repairs = 3
+
+# Explicit opt-in preserves the formal RTL controller's default flow.
+# Standalone Readiness keeps rtl_stage_release=false. Project adoption requires
+# an independent RTL audit; enable rtl_review for that controller handoff.
+[readiness]
+enabled = false
+after_repair = false
+rtl_review = false
+# change completes a scoped review without full RTL-stage release.
+review_scope = "change"
+max_review_repairs = 3
+max_campaigns = 1
+max_jobs = 20
+max_job_seconds = 60
+tool_seconds = 240
+session_seconds = 900
+assistant_turns = 80
+review_seconds = 600
+review_turns = 50
+max_variants = 2
+region_roots = []
+build_files = []

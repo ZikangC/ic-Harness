@@ -22,7 +22,7 @@ class EntryTests(unittest.TestCase):
             readiness.run(argparse.Namespace(**(base | {'resume': 'retained'})))
             self.assertTrue(controller.call_args.kwargs['readiness_only'])
 
-    def test_seed_import_precedes_readiness_with_no_generation_or_independent_audit(self):
+    def test_explicit_entry_runs_with_disabled_ordinary_hook_and_no_generation_or_audit(self):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
             config = root / 'harness/config'
@@ -31,7 +31,7 @@ class EntryTests(unittest.TestCase):
                 '[project]\nroot="../.."\ninput_dir="input"\n'
                 '[remote]\nssh_host="fixture"\n'
                 '[eda]\npython="/fixture/python"\nverilator="/fixture/verilator"\nyosys="/fixture/yosys"\nopenroad="/fixture/openroad"\n')
-            (config / 'rtl.toml').write_text('[readiness]\nenabled=true\n')
+            (config / 'rtl.toml').write_text('[readiness]\nenabled=false\n')
             (config / 'models.toml').write_text('schema_version=1\n')
             provenance = root / 'provenance.json'
             provenance.write_text('{"candidate_sha256":"frozen-candidate"}')
@@ -54,6 +54,9 @@ class EntryTests(unittest.TestCase):
                                 'input_source_paths': {}}
                     return {'ok': True}
             def hook(context, remote):
+                self.assertTrue(context['settings']['readiness']['enabled'])
+                initialized = next(q for q in calls if q['action'] == 'init')
+                self.assertTrue(initialized['settings']['readiness']['enabled'])
                 self.assertEqual(calls[-1]['action'], 'rtl_readiness_seed')
                 self.assertEqual(calls[-1]['include_paths'], ['rtl/dut.sv'])
                 self.assertEqual(calls[-1]['provenance']['candidate_sha256'], 'frozen-candidate')
@@ -72,7 +75,7 @@ class EntryTests(unittest.TestCase):
             final = [q['value'] for q in calls if q['action'] == 'set_status'][-1]
             self.assertFalse(final['rtl_stage_release'])
 
-    def run_formal_entry(self, *, adopted=True, audit_release=True, resume_phase=None, extra_settings='', interrupt_audit=False):
+    def run_formal_entry(self, *, adopted=True, audit_pass=True, resume_phase=None, extra_settings='', interrupt_audit=False):
         """No implementation skill is installed in this readiness-only fixture."""
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
@@ -116,11 +119,13 @@ class EntryTests(unittest.TestCase):
                 self.assertFalse((Path(context['harness_dir']) / 'skills/rtl-implementation/SKILL.md').exists())
                 self.assertIs(options['repair_handler'], rtl.readiness_repair)
                 self.assertEqual(options['max_repairs'], 1)
+                scope = context['settings']['readiness'].get('review_scope', 'change')
+                self.assertEqual(options['review_scope'], scope)
                 self.assertEqual(calls[-1]['value']['phase'], 'audit')
                 if interrupt_audit:
                     raise KeyboardInterrupt()
-                return {'status': 'rtl_review_finished', 'review_verdict': 'pass' if audit_release else 'blocked',
-                        'rtl_stage_release': audit_release}
+                return {'status': 'rtl_review_finished', 'review_verdict': 'pass' if audit_pass else 'blocked',
+                        'review_scope': scope, 'rtl_stage_release': audit_pass and scope == 'candidate'}
             with patch.object(rtl, 'validate_skills'), \
                     patch.object(rtl, 'load_input_bundle', return_value=(
                         {'spec.md': 'fixture', 'reference.py': 'pass'}, {}, {'source_paths': {}})), \
@@ -142,8 +147,16 @@ class EntryTests(unittest.TestCase):
     def test_opt_in_adopted_candidate_uses_existing_audit_with_readiness_repair(self):
         result, investigations, reviews, calls, final = self.run_formal_entry()
         self.assertEqual((result, investigations, reviews), (0, 1, 1))
-        self.assertTrue(final['rtl_stage_release'])
+        self.assertFalse(final['rtl_stage_release'])
+        self.assertEqual(final['review_scope'], 'change')
         self.assertEqual(final['phase'], 'audit')
+
+    def test_explicit_candidate_scope_retains_whole_candidate_release_route(self):
+        result, investigations, reviews, calls, final = self.run_formal_entry(
+            extra_settings='review_scope="candidate"\n')
+        self.assertEqual((result, investigations, reviews), (0, 1, 1))
+        self.assertEqual(final['review_scope'], 'candidate')
+        self.assertTrue(final['rtl_stage_release'])
 
     def test_opt_in_negative_investigation_does_not_invoke_formal_audit(self):
         result, investigations, reviews, calls, final = self.run_formal_entry(adopted=False)
@@ -152,7 +165,7 @@ class EntryTests(unittest.TestCase):
         self.assertEqual(final['phase'], 'readiness')
 
     def test_opt_in_failed_formal_review_returns_failure(self):
-        result, investigations, reviews, calls, final = self.run_formal_entry(audit_release=False)
+        result, investigations, reviews, calls, final = self.run_formal_entry(audit_pass=False)
         self.assertEqual((result, investigations, reviews), (1, 1, 1))
         self.assertEqual(final['review_verdict'], 'blocked')
         self.assertFalse(final['rtl_stage_release'])
@@ -162,7 +175,8 @@ class EntryTests(unittest.TestCase):
         self.assertEqual((result, investigations, reviews), (0, 0, 1))
         self.assertEqual([req for req in calls if req['action'] == 'rtl_readiness_seed'],
                          [{'action': 'rtl_readiness_seed', 'validate_only': True}])
-        self.assertTrue(final['rtl_stage_release'])
+        self.assertFalse(final['rtl_stage_release'])
+        self.assertEqual(final['review_scope'], 'change')
 
     def test_formal_readiness_interrupt_preserves_persistent_jobs_and_audit_phase(self):
         result, investigations, reviews, calls, final = self.run_formal_entry(interrupt_audit=True)

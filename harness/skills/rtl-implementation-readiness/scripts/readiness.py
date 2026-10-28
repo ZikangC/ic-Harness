@@ -21,6 +21,10 @@ def main():
     a.add_argument("--include", action="append", default=[], dest="include_dirs")
     a.add_argument("--asset", action="append", default=[], dest="assets")
     a.add_argument("--allow-edit", action="append", default=None, dest="allowed_paths")
+    a.add_argument("--region-root", action="append", default=[], dest="region_roots",
+                   help="Own a relative directory for new regional RTL; enables API 3")
+    a.add_argument("--build-file", action="append", default=[], dest="build_files",
+                   help="Editable plain ordered source filelist; enables API 3")
     a = sub.add_parser("clone-workspace", help="Clone sealed inputs and explicitly reference completed measurements or paired functional checks")
     a.add_argument("source", type=Path)
     a.add_argument("--workspace", type=Path, required=True)
@@ -29,10 +33,20 @@ def main():
     a = sub.add_parser("analyze", help="Locate source risks and owned expensive experiments")
     a.add_argument("workspace", type=Path)
     a.add_argument("--out", type=Path)
+    a = sub.add_parser("health", help="Read existing structural evidence without running tools or changing RTL")
+    a.add_argument("workspace", type=Path)
+    a.add_argument("--variant", default="baseline")
+    a.add_argument("--baseline-job", action="append", default=[])
+    a.add_argument("--candidate-job", action="append", default=[])
+    a.add_argument("--baseline-evidence", action="append", type=Path, default=[])
+    a.add_argument("--candidate-evidence", action="append", type=Path, default=[])
+    a.add_argument("--out", type=Path, required=True)
     a = sub.add_parser("variant", help="Seal an RTL overlay as an independent candidate")
     a.add_argument("workspace", type=Path)
     a.add_argument("name")
     a.add_argument("--overlay", type=Path, required=True)
+    a.add_argument("--delete", action="append", default=[], dest="delete_paths")
+    a.add_argument("--build", type=Path, help="Candidate build JSON with ordered sources/include_dirs")
     a = sub.add_parser("run", help="Submit or query the same persistent experiment identity")
     a.add_argument("workspace", type=Path)
     a.add_argument("--variant", default="baseline")
@@ -59,6 +73,7 @@ def main():
         a.add_argument("--metric", choices=["elapsed_seconds", "peak_rss_bytes"], default="elapsed_seconds")
         a.add_argument("--min-ratio", type=float, default=1.2)
         a.add_argument("--min-repeats", type=int, default=3)
+        a.add_argument("--health", type=Path, help="Source-bound structural report from health; revalidated read-only")
         a.add_argument("--out", type=Path, required=True)
     a = sub.add_parser("verify-finalization", help="Read-only fresh verification of a finalization and its evidence")
     a.add_argument("workspace", type=Path)
@@ -75,7 +90,8 @@ def main():
     try:
         if args.action == "init":
             result = init_workspace(args.project, args.workspace, args.sources, args.top,
-                                    args.include_dirs, args.assets, args.allowed_paths)
+                                    args.include_dirs, args.assets, args.allowed_paths,
+                                    region_roots=args.region_roots, build_files=args.build_files)
         elif args.action == "clone-workspace":
             from receipt_reuse import clone_workspace
             result = clone_workspace(args.source, args.workspace, args.jobs, args.variants)
@@ -86,7 +102,16 @@ def main():
                 _owned_output(args.workspace, args.out)
                 save_json(args.out, result)
         elif args.action == "variant":
-            result = create_variant(args.workspace, args.name, args.overlay)
+            result = create_variant(args.workspace, args.name, args.overlay,
+                                    delete_paths=args.delete_paths,
+                                    build=read_json(args.build) if args.build else None)
+        elif args.action == "health":
+            from health import assess
+            _owned_output(args.workspace, args.out)
+            result = assess(args.workspace, args.variant, baseline_jobs=args.baseline_job,
+                            candidate_jobs=args.candidate_job, baseline_evidence=args.baseline_evidence,
+                            candidate_evidence=args.candidate_evidence)
+            save_json(args.out, result)
         elif args.action == "run":
             from experiments import submit
             result = submit(args.workspace, variant=args.variant, config=read_json(args.config),
@@ -103,14 +128,14 @@ def main():
             from comparison import compare
             result = compare(args.workspace, args.variant, args.baseline_job, args.candidate_job,
                              args.verification_job, metric=args.metric, min_ratio=args.min_ratio,
-                             min_repeats=args.min_repeats)
+                             min_repeats=args.min_repeats, health=args.health)
             _owned_output(args.workspace, args.out)
             save_json(args.out, result)
         elif args.action == "finalize":
             from comparison import finalize
             result = finalize(args.workspace, args.variant, args.baseline_job, args.candidate_job,
                               args.verification_job, destination=args.out, metric=args.metric,
-                              min_ratio=args.min_ratio, min_repeats=args.min_repeats)
+                              min_ratio=args.min_ratio, min_repeats=args.min_repeats, health=args.health)
         elif args.action == "verify-finalization":
             from comparison import verify_finalization
             result = verify_finalization(args.workspace, args.delivery)

@@ -42,7 +42,10 @@ def _lock(out):
 
 def _binding(out):
     """Pin the actual current RTL, plus validated imported ancestry when present."""
-    result = {'source_sha256': readiness.digest(readiness.source_inventory(out / 'work'))}
+    policy = readiness.regional_policy(out)
+    result = {'source_sha256': readiness.digest(readiness.source_inventory(out / 'work', policy['build_files']))}
+    if policy['region_roots'] or policy['build_files']:
+        result['regional_policy'] = policy
     path = out / 'control/readiness-seed.json'
     if path.exists():
         from harness.runtime.rtl_readiness_seed import seed

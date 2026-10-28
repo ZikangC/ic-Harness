@@ -17,6 +17,8 @@ class RtlAuditRuntimeTests(unittest.TestCase):
 
  def begin(self,**kwargs):
   if not(self.out/'work/design.sv').exists():self.write('design.sv','module design; endmodule\n')
+  top='repaired'if(self.out/'work/design.sv').read_text()=='module repaired; endmodule\n'else'design'
+  self.write('RTL_STRUCTURE.json',json.dumps({'version':1,'configurations':[{'id':'delivery','top':top,'sources':['design.sv']}],'blackboxes':[]}))
   return self.call(action='rtl_review_begin',**kwargs)
 
  def audit_job(self,review,code='import sys\nassert open(sys.argv[1]).read()\n',name='check.py'):
@@ -25,10 +27,17 @@ class RtlAuditRuntimeTests(unittest.TestCase):
   return job,self.wait(job)
 
  def report(self,review,verdict,evidence):
-  self.write('review.json',json.dumps({'verdict':verdict,'candidate_sha256':review['candidate_sha256'],'reason':'Recorded fixture check outcome','evidence':evidence}),review['audit_scope'])
+  self.write('review.json',json.dumps({'verdict':verdict,'review_scope': review['review_scope'], 'candidate_sha256':review['candidate_sha256'],'reason':'Recorded fixture check outcome','evidence':evidence}),review['audit_scope'])
 
  def decide(self,review,verdict,evidence):
   self.report(review,verdict,evidence)
+  if verdict=='pass':
+   # These fixture modules are defined in this test (design/repaired), not
+   # inferred from a project spec. The real native check is required as well.
+   source=(self.out/review['candidate_scope']/'design.sv').read_text()
+   top='repaired'if source=='module repaired; endmodule\n'else'design'
+   structure,job=fixture.structure_report(self,review,top=top)
+   path=self.out/review['audit_scope']/'review.json';data=json.loads(path.read_text());data['structure_checks']=structure;data['evidence'].append(job);path.write_text(json.dumps(data))
   return self.call(action='rtl_review_decision',review=review['review'],report_path='review.json',expected_verdict='revise'if verdict=='revise'else'final')
 
  def revise(self):

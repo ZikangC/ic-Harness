@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "cases": [
+    {"name": "clean", "sources": ["clean.sv"], "expected": "passed"},
+    {"name": "partial_used", "sources": ["partial_used.sv"], "expected": "findings", "minimum_undriven": 4},
+    {"name": "undriven", "sources": ["undriven.sv"], "expected": "findings", "minimum_undriven": 1},
+    {"name": "unused_partial", "sources": ["unused_partial.sv"], "expected": "passed"},
+    {"name": "register_hold", "sources": ["register_hold.sv"], "expected": "passed"},
+    {"name": "blackbox", "sources": ["blackbox.sv"], "expected": "passed", "expected_blackbox_modules": ["peripheral"], "allowed_blackboxes": ["peripheral"]},
+    {"name": "spoofed_dut_blackbox", "sources": ["spoofed_dut_blackbox.sv"], "expected": "passed", "expected_blackbox_modules": ["required_dut"], "allowed_blackboxes": [], "expected_release_admission": "blocked"},
+    {"name": "whitebox", "sources": ["whitebox.sv"], "expected": "passed", "expected_whitebox_modules": ["arithmetic_macro"], "allowed_whiteboxes": ["arithmetic_macro"]},
+    {"name": "multiple_drivers", "sources": ["multiple_drivers.sv"], "expected": "findings"},
+    {"name": "missing_module", "sources": ["missing_module.sv"], "expected": "tool_failure"}
+  ]
+}

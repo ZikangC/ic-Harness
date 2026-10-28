@@ -33,9 +33,26 @@ class RepairHandler:
             raise ValueError('repair handler requires a stable name and callable prepare')
 
 
+def _review_scope(review):
+    # Legacy records remain readable but cannot grant a new release.
+    scope = review.get('review_scope')
+    if 'review_scope' in review and scope not in ('candidate', 'change'):
+        raise ValueError('unknown RTL review_scope')
+    decision = review.get('decision')
+    if decision is not None and decision.get('review_scope') != scope:
+        raise ValueError('RTL decision review_scope differs from frozen review')
+    return scope
+
+
 def _completed(answer):
     return (answer.get('completed') is True and answer.get('tool_isolation_ok') is True
             and not answer.get('budget_exhausted'))
+
+
+def _ended(receipt):
+    # Initial resume placeholders have no integer terminal exit code.
+    # A failed ended actor may be replaced, but never supplies acceptance.
+    return bool(receipt) and (_completed(receipt) or type(receipt.get('exit_code')) is int)
 
 
 def _receipt(remote, review, kind):
@@ -54,20 +71,24 @@ def _receipt(remote, review, kind):
     if text is None:
         text = '\n'.join(line.split(': ', 1)[1] for line in response['text'].splitlines())
     receipt = json.loads(text)
-    if (receipt.get('candidate_sha256') != review['candidate_sha256'] or
+    if (receipt.get('review_scope') != _review_scope(review) or
+            receipt.get('candidate_sha256') != review['candidate_sha256'] or
             receipt.get('decision_report_sha256') !=
             (review.get('decision') or {}).get('report_sha256')):
         return None
     return receipt
 
 
-def _save_receipt(remote, review, kind, answer, label, repair_actor=None):
+def _save_receipt(remote, review, kind, answer, label, repair_actor=None, started_evidence_sha256=None):
     # Final prose stays in the full session result, not in this resume marker.
     remote.evidence(f'rtl-audit/{review["review"]}.{kind}.json', json.dumps({
         k: answer.get(k) for k in ('completed', 'tool_isolation_ok', 'exit_code',
                                   'stop_reason', 'model', 'role', 'budget_exhausted')} | {
             'session_label': label, 'candidate_sha256': review['candidate_sha256'],
+            'review_scope': _review_scope(review),
             'decision_report_sha256': (review.get('decision') or {}).get('report_sha256'),
+            'evidence_sha256': review.get('evidence_sha256'),
+            'started_evidence_sha256': started_evidence_sha256,
             **({'repair_actor': repair_actor} if repair_actor is not None else {})},
             indent=2))
 
@@ -75,14 +96,15 @@ def _save_receipt(remote, review, kind, answer, label, repair_actor=None):
 def _session(context, remote, review, kind, prompt, scope, role, *, repair_actor=None, context_updates=None):
     cache = Path(context['cache'])
     label = f'rtl-{kind}-{review["review"]}-{time.time_ns()}'
-    child = dict(context, role=role, scope=scope, review=review['review'])
+    child = dict(context, role=role, scope=scope, review=review['review'],
+                 review_scope=_review_scope(review))
     # Each actor is fresh; no parent actor or repair capability leaks to audit.
     for key in ('session_id', 'session_actor_sha256', 'candidate_scope', 'repair_skill', 'repair_actor'):
         child.pop(key, None)
     updates = {} if context_updates is None else context_updates
     if not isinstance(updates, dict) or any(key in context or key in
             ('role', 'scope', 'review', 'candidate_scope', 'session_id',
-             'session_actor_sha256', 'repair_actor') for key in updates):
+             'session_actor_sha256', 'repair_actor', 'review_scope') for key in updates):
         raise ValueError('repair context cannot override frozen context or isolation bindings')
     child.update(updates)
     if repair_actor is not None:
@@ -91,18 +113,22 @@ def _session(context, remote, review, kind, prompt, scope, role, *, repair_actor
     model_role = 'review' if role == 'rtl_audit' else 'implementation'
     path = cache / (label + '.context.json')
     path.write_text(json.dumps(child))
+    started_evidence = review.get('evidence_sha256')
     _save_receipt(remote, review, kind, {'completed': False,
-                  'tool_isolation_ok': False}, label, repair_actor)
+                  'tool_isolation_ok': False}, label, repair_actor, started_evidence)
     answer = run_session(prompt, model_role, context['models'],
                          Path(context['project_root']), path, cache, remote, label)
     latest = remote.call({'action': 'rtl_review_status', 'review': review['review']})
-    _save_receipt(remote, latest, kind, answer, label, repair_actor)
+    if _review_scope(latest) != _review_scope(review):
+        raise ValueError('RTL review_scope changed during model session')
+    _save_receipt(remote, latest, kind, answer, label, repair_actor, started_evidence)
     return answer
 
 
 def _context_text(context, review):
     return json.dumps({k: context[k] for k in ('remote_run_dir', 'tools',
                        'capabilities', 'reference_path', 'input_source_paths')}
+                      | {'review_scope': _review_scope(review)}
                       | {k: review[k] for k in ('review', 'audit_scope',
                          'candidate_scope', 'candidate_sha256', 'architecture_scope',
                          'architecture_identity_sha256', 'decision') if k in review},
@@ -124,7 +150,9 @@ def _frozen_architecture(remote, review):
     # This opt-in action is controller-only, not a registered model tool.
     # Transport/worker errors propagate; absence is never an empty baseline.
     current = remote.call({'action': 'rtl_review_status', 'review': review['review'],
-                           'include_architecture_context': True})
+                           'include_architecture_context': True, 'review_scope': _review_scope(review)})
+    if _review_scope(current) != _review_scope(review):
+        raise ValueError('frozen architecture context has stale review_scope binding')
     for key in ('review', 'candidate_sha256', 'architecture_scope',
                 'architecture_identity_sha256', 'decision'):
         if key not in review or current.get(key) != review[key]:
@@ -208,7 +236,8 @@ def _decision_result(review):
     decision = review['decision']
     return {'status': 'rtl_review_finished', 'review': review['review'],
             'review_verdict': decision['verdict'],
-            'rtl_stage_release': decision['verdict'] == 'pass',
+            'review_scope': _review_scope(review),
+            'rtl_stage_release': decision['verdict'] == 'pass' and _review_scope(review) == 'candidate',
             'candidate_sha256': review['candidate_sha256'],
             'candidate_scope': review['candidate_scope'],
             'report_path': decision['report_path'], 'report_sha256': decision['report_sha256']}
@@ -261,24 +290,43 @@ def _reserve_repair(remote, review, actor, limit):
     remote.evidence(name, json.dumps(ledger, indent=2))
     return True
 
-def review_once(context, remote):
+def review_once(context, remote, *, review_scope='candidate'):
     """Review a frozen candidate without selecting or invoking a repair executor.
 
     Source/session guards may require a fresh scope; no RTL repair is started.
     """
-    return run(context, remote)
+    return run(context, remote, review_scope=review_scope)
 
 
-def run(context, remote, before_freeze=None, *, repair_handler=None, max_repairs=None):
+def _repair_limit(context, limit):
+    if limit is None:
+        limit = context.get('settings', {}).get('rtl_audit', {}).get('max_repairs', 3)
+    if type(limit) is not int or limit < 0:
+        raise ValueError('max_repairs must be a finite non-negative integer')
+    return limit
+
+
+def _new_progress(review, receipt, key='evidence_sha256'):
+    """A new native record permits another judgment; it never establishes pass."""
+    if review.get('work_current') is False or review.get('architecture_current') is False:
+        return True
+    before, after = receipt.get(key), review.get('evidence_sha256')
+    return isinstance(before, str) and isinstance(after, str) and before != after
+
+
+def run(context, remote, before_freeze=None, *, repair_handler=None, max_repairs=None,
+        review_scope='candidate'):
     """Follow independent review decisions using only an explicitly supplied repair policy.
 
     max_repairs is a persistent per-executor round budget, not a model retry budget.
     A failed/interrupted model stops this invocation; resume preserves reservations.
+    review_scope is caller-owned; only an explicit candidate pass releases RTL.
     """
+    if review_scope not in ('candidate', 'change'):
+        raise ValueError('unknown RTL review_scope')
     if repair_handler is not None and not isinstance(repair_handler, RepairHandler):
         raise TypeError('repair_handler must be a named RepairHandler')
-    if max_repairs is not None and (type(max_repairs) is not int or max_repairs < 0):
-        raise ValueError('max_repairs must be a non-negative integer or None')
+    max_repairs = _repair_limit(context, max_repairs)
     harness = Path(context['harness_dir'])
     skill_path = harness / 'skills/rtl-audit/SKILL.md'
     if not skill_path.is_file():
@@ -288,9 +336,20 @@ def run(context, remote, before_freeze=None, *, repair_handler=None, max_repairs
     # Generation or a prior interrupted client may have left detached tools running.
     wait_for_jobs(remote)
     current = remote.call({'action': 'rtl_review_status'})
+    if current.get('review') and _review_scope(current) != review_scope:
+        # A narrower result and untyped legacy records cannot satisfy this
+        # request. Preserve active actors until their controller receipt ends.
+        if (current.get('repair') or {}).get('status') == 'active':
+            raise ValueError('existing RTL review_scope differs; active repair cannot be migrated')
+        receipt = _receipt(remote, current, 'audit')
+        if not _ended(receipt):
+            raise ValueError('existing RTL review_scope differs; unfinished review cannot be replaced')
+        current = remote.call({'action': 'rtl_review_begin', 'review_scope': review_scope})
     if not current.get('review'):
-        current = remote.call({'action': 'rtl_review_begin'})
+        current = remote.call({'action': 'rtl_review_begin', 'review_scope': review_scope})
     while True:
+        if _review_scope(current) != review_scope:
+            raise ValueError('RTL review_scope differs from caller request')
         review = current['review']
         decision = current.get('decision')
         if decision is None:
@@ -298,6 +357,11 @@ def run(context, remote, before_freeze=None, *, repair_handler=None, max_repairs
                       + _delivery_task(context)
                       + _frozen_architecture(remote, current)
                       + 'SERVER CONTEXT:\n' + _context_text(context, current) + '\n'
+                      'REVIEW SCOPE: ' + review_scope + '. Copy this exact value into '
+                      'the report review_scope field. candidate requests full candidate '
+                      'acceptance; change requests acceptance of the delivered modification '
+                      'and its relevant effects, with inherited baseline limitations kept '
+                      'explicit. A change pass never releases the whole RTL stage.\n'
                       'The candidate is immutable. All relative writes and jobs belong '
                       'to the supplied audit scope. Read the original sources directly. '
                       'Prior test files/results may have been copied for continuity; '
@@ -327,25 +391,22 @@ def run(context, remote, before_freeze=None, *, repair_handler=None, max_repairs
             if not receipt or not _completed(receipt):
                 # A crash may fall between publication and the session receipt.
                 # Preserve that decision, but obtain a fresh independent review.
-                current = remote.call({'action': 'rtl_review_begin'})
+                current = remote.call({'action': 'rtl_review_begin', 'review_scope': review_scope})
                 continue
             if decision['verdict'] in ('blocked', 'insufficient_evidence'):
-                # An explicit resume may follow an external environment recovery.
-                # Keep the old outcome and gather fresh evidence in a new scope.
-                current = remote.call({'action': 'rtl_review_begin'})
+                # An explicit resume is not itself new engineering evidence.
+                # Preserve the cause/report until source, architecture or native
+                # job metadata changes; neither outcome selects an RTL repair.
+                if not _new_progress(current, receipt):
+                    return _decision_result(current)
+                current = remote.call({'action': 'rtl_review_begin', 'review_scope': review_scope})
                 continue
 
         if decision['verdict'] != 'revise':
             if not current.get('architecture_current', True) or not current.get('work_current', True):
-                current = remote.call({'action': 'rtl_review_begin'})
+                current = remote.call({'action': 'rtl_review_begin', 'review_scope': review_scope})
                 continue
-            return {'status': 'rtl_review_finished', 'review': review,
-                    'review_verdict': decision['verdict'],
-                    'rtl_stage_release': decision['verdict'] == 'pass',
-                    'candidate_sha256': current['candidate_sha256'],
-                    'candidate_scope': current['candidate_scope'],
-                    'report_path': decision['report_path'],
-                    'report_sha256': decision['report_sha256']}
+            return _decision_result(current)
 
         readback = current.get('parent_readback')
         if (isinstance(readback, dict) and readback.get('required') is True
@@ -364,13 +425,17 @@ def run(context, remote, before_freeze=None, *, repair_handler=None, max_repairs
 
         repair = current.get('repair') or {}
         prior = _receipt(remote, current, 'repair')
-        if (prior is not None and prior.get('repair_actor') != repair_handler.name
+        if (repair.get('status') != 'completed' and prior is not None and prior.get('repair_actor') != repair_handler.name
                 or repair.get('status') == 'completed' and
                    (not prior or not _completed(prior))):
             return _decision_result(current) | {
                 'status': 'rtl_repair_actor_mismatch', 'repair_required': True,
                 'reason': 'Recorded repair lacks a completed receipt for the caller-selected executor.'}
-        if not _reserve_repair(remote, current, repair_handler.name, max_repairs):
+        # A completed old repair may only need its next freeze after a crash.
+        # Its source-bound receipt proves the old executor; the caller's policy
+        # applies to the next candidate. Do not charge or run that repair twice.
+        if (repair.get('status') != 'completed' and
+                not _reserve_repair(remote, current, repair_handler.name, max_repairs)):
             return _decision_result(current) | {
                 'status': 'rtl_repair_budget_exhausted', 'repair_required': True,
                 'reason': 'Persistent repair-round budget exhausted; independent revise decision retained.'}
@@ -390,8 +455,21 @@ def run(context, remote, before_freeze=None, *, repair_handler=None, max_repairs
                             'rtl_stage_release': False}
             wait_for_jobs(remote)
             current = remote.call({'action': 'rtl_repair_end', 'review': review})
+        repair_receipt = _receipt(remote, current, 'repair')
+        if (current.get('work_current') is True and current.get('architecture_current') is True
+                and repair_receipt and not _new_progress(current, repair_receipt, 'started_evidence_sha256')):
+            return _decision_result(current) | {
+                'status': 'rtl_repair_no_progress', 'repair_required': True,
+                'reason': 'Repair ended without a source/architecture change or new native job evidence; original issues remain open.'}
         if before_freeze is not None:
-            before_freeze()
+            selected = before_freeze()
+            if selected is not None:
+                if (not isinstance(selected, dict) or set(selected) != {'repair_handler', 'max_repairs'}
+                        or not isinstance(selected['repair_handler'], RepairHandler)):
+                    raise ValueError('before_freeze must return an explicit repair handler and finite budget')
+                repair_handler = selected['repair_handler']
+                max_repairs = _repair_limit(context, selected['max_repairs'])
         # A callback may have submitted jobs. Freeze only after all jobs drain.
         wait_for_jobs(remote)
-        current = remote.call({'action': 'rtl_review_begin', 'seed_review': review})
+        current = remote.call({'action': 'rtl_review_begin', 'seed_review': review,
+                               'review_scope': review_scope})

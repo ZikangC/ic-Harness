@@ -43,6 +43,7 @@ def _finalize_options(workspace, raw):
     if not isinstance(raw, dict) or set(raw) - {
         "variant", "baseline_jobs", "candidate_jobs", "verification_jobs", "out",
         "metric", "min_ratio", "min_repeats",
+        "health",
     }:
         raise ReadinessError("Invalid batch finalization options")
     if not isinstance(raw.get("variant"), str):
@@ -69,9 +70,15 @@ def _finalize_options(workspace, raw):
             or not math.isfinite(ratio) or ratio <= 1
             or isinstance(repeats, bool) or not isinstance(repeats, int) or repeats < 1):
         raise ReadinessError("Invalid comparison metric, ratio or repeat count")
+    health = {}
+    if "health" in raw:
+        if not isinstance(raw["health"], str):
+            raise ReadinessError("Batch health report must be a relative workspace path")
+        health = {"health": safe_relative(raw["health"])}
+        under(workspace, health["health"])
     return {"variant": variant, "baseline_jobs": baseline, "candidate_jobs": candidate,
             "verification_jobs": verification, "out": out, "metric": metric,
-            "min_ratio": ratio, "min_repeats": repeats}
+            "min_ratio": ratio, "min_repeats": repeats, **health}
 
 
 def _prepare(workspace, plan, batch_id, tool_seconds):
@@ -166,7 +173,8 @@ def _finalization(workspace, options):
     destination = under(workspace, options["out"])
     finalize(workspace, options["variant"], options["baseline_jobs"], options["candidate_jobs"],
              options["verification_jobs"], destination=destination, metric=options["metric"],
-             min_ratio=options["min_ratio"], min_repeats=options["min_repeats"])
+             min_ratio=options["min_ratio"], min_repeats=options["min_repeats"],
+             health=under(workspace, options["health"]) if "health" in options else None)
     return verify_finalization(workspace, destination)
 
 
@@ -193,8 +201,13 @@ def verify_batch(workspace, *, plan, batch_id, tool_seconds):
             raise ReadinessError("Partial batch cannot certify a finalization")
         checked = verify_finalization(workspace, under(workspace, options["out"]))
         report = read_json(Path(checked["comparison"]))
+        if "structural_health" not in report and "structural_health" not in result["finalization"]:
+            # Retain the historical batch receipt; missing health stays unknown.
+            checked.pop("structural_health", None)
+            checked.pop("health_report", None)
         if (checked != result["finalization"]
-                or any(report.get(key) != value for key, value in options.items() if key != "out")):
+                or any(report.get(key) != value for key, value in options.items() if key not in ("out", "health"))
+                or ("health" in options and (report.get("health_report") or {}).get("path") != str(under(workspace, options["health"])))):
             raise ReadinessError("Batch finalization differs from its frozen plan")
     return result
 

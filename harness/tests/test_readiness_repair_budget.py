@@ -30,7 +30,7 @@ class ReadinessRepairBudgetTests(unittest.TestCase):
         review = self.call(action='rtl_review_begin')
         scope = review['audit_scope']
         report = self.out / scope / 'review.json'
-        report.write_text(json.dumps({'verdict': 'revise', 'candidate_sha256': review['candidate_sha256'],
+        report.write_text(json.dumps({'verdict': 'revise', 'review_scope': review['review_scope'], 'candidate_sha256': review['candidate_sha256'],
                                       'reason': 'Synthetic queue budget fixture, no hardware claim.', 'evidence': []}))
         review = self.call(action='rtl_review_decision', review=review['review'],
                            report_path='review.json', expected_verdict='revise')

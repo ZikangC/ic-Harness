@@ -134,19 +134,31 @@ def terminal(out, actor, result, raw_events):
         if start.get('toolName') != 'rtl_remote' or not isinstance(args, dict) or args.get('action') != 'handoff':
             continue
         public = event.get('result')
-        if (args.get('job_id') != response['job_id'] or event.get('isError') is not False
-                or not isinstance(public, dict) or public.get('isError', False) is not False):
-            raise ValueError('readiness handoff tool failed or selected a different job')
+        if not isinstance(public, dict):
+            raise ValueError('invalid readiness handoff public result')
         content = public.get('content')
         if (not isinstance(content, list) or len(content) != 1 or not isinstance(content[0], dict)
                 or content[0].get('type') != 'text'
                 or not isinstance(content[0].get('text'), str)):
             raise ValueError('invalid readiness handoff public result')
         payload = json.loads(content[0]['text'])
+        # A rejected attempt leaves the same actor active and may be corrected.
+        # Only the bridge's explicit error-only result is a rejection witness;
+        # error flags cannot hide an accepted or otherwise ambiguous receipt.
+        if (matched == 0 and type(event.get('isError')) is bool and public.get('isError') is True
+                and isinstance(payload, dict) and set(payload) == {'error'}
+                and isinstance(payload['error'], str) and payload['error'].strip()
+                and ('details' not in public or public['details'] == payload)):
+            continue
+        if (args.get('job_id') != response['job_id'] or event.get('isError') is not False
+                or public.get('isError', False) is not False):
+            raise ValueError('readiness handoff tool failed or selected a different job')
         if not isinstance(payload, dict) or any(payload.get(key) != response[key]
                 for key in ('accepted', 'session_id', 'job_id', 'receipt_sha256')):
             raise ValueError('readiness handoff public result binding mismatch')
         matched += 1
+    if calls:
+        raise ValueError('unpaired readiness handoff tool start')
     if matched != 1:
         raise ValueError('readiness handoff requires one actual successful tool pair')
     return path

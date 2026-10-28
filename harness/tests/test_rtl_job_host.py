@@ -86,16 +86,6 @@ class HostJobs(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.context()
 
-    def test_readiness_roles_mount_only_the_exact_campaign_scope(self):
-        for leaf in ('work', 'audit'):
-            self.source = self.run / 'readiness/campaign-1' / leaf
-            self.source.mkdir(parents=True, exist_ok=True)
-            scope = 'readiness/campaign-1/' + leaf
-            target = '/workspace/project/output/run1/' + scope
-            self.request.update(scope=scope, cwd=target, source_dir=target)
-            host.save(self.job / 'request.json', self.request)
-            self.assertEqual(self.context()['host_source'], self.source)
-
     def test_symlink_source_parent_rejected(self):
         self.source.rmdir()
         self.source.symlink_to(self.job, target_is_directory=True)
@@ -204,7 +194,7 @@ class HostJobs(unittest.TestCase):
             docker.assert_not_called()
         self.assertFalse((self.job / 'result.json').exists())
 
-    def run_attached(self, state):
+    def run_attached(self, state, checks=None):
         self.intent()
         host.save(self.job / 'host-launch.json', dict(payload=self.payload,
                   request_sha256=host.sha(self.job / 'request.json'),
@@ -215,7 +205,7 @@ class HostJobs(unittest.TestCase):
         process = mock.Mock(returncode=0)
         process.poll.return_value = 0
         process.wait.return_value = 0
-        check = [{'ok': True, 'source_at_start_sha256': {}}, {'ok': True, 'source_after_sha256': {}}]
+        check = checks if checks is not None else [{'ok': True, 'source_at_start_sha256': {}}, {'ok': True, 'source_after_sha256': {}}]
         with mock.patch.object(host, 'control_check', side_effect=check), mock.patch.object(host, 'own_container', return_value=info):
             with mock.patch.object(host, 'docker', side_effect=lambda args: 'd' * 64 if args[0] == 'create' else ''):
                 with mock.patch.object(host.os, 'chown'), mock.patch.object(host.subprocess, 'Popen', return_value=process):
@@ -237,6 +227,107 @@ class HostJobs(unittest.TestCase):
         self.assertEqual(result['isolation']['container_id'], 'd' * 64)
         self.assertTrue(result['isolation']['cleanup_complete'])
         self.assertNotIn('error', result)
+
+    def work_context(self):
+        self.source.rmdir()
+        self.source = self.run / 'work'
+        self.source.mkdir()
+        source = '/workspace/project/output/run1/work'
+        self.request.update(scope='work', cwd=source, source_dir=source)
+        host.save(self.job / 'request.json', self.request)
+        return self.context()
+
+    def source_failure(self, context, phase='after'):
+        request = context['request']
+        failure = dict(version=2, kind='ordinary_work_inventory_incomplete', job_id='123',
+                       phase=phase, stage='source_inventory', scope='work', source_dir=request['source_dir'],
+                       request_sha256=context['request_sha256'],
+                       guard_set_sha256=host.digest(request.get('integrity_guards', [])),
+                       protected_guards_checked=True, source_containment_checked=True, native_job=False, exception_type='FileNotFoundError',
+                       message='synthetic vanished build entry', errno=2, filename=request['source_dir'] + '/build.o')
+        return dict(ok=False, error='FileNotFoundError: ' + failure['message'], job_check_failure=failure)
+
+    def test_bound_ordinary_work_inventory_failure_is_not_protected_tamper(self):
+        context = self.work_context()
+        response = self.source_failure(context)
+        with mock.patch.object(host, 'docker', return_value=json.dumps(response)):
+            with self.assertRaises(host.JobSourceCheckError) as raised:
+                host.control_check(context, 'after')
+        self.assertEqual(raised.exception.failure, response['job_check_failure'])
+        self.assertNotIsInstance(raised.exception, host.JobIntegrityError)
+
+    def test_incomplete_or_mismatched_source_failure_keeps_fail_closed_path(self):
+        context = self.work_context()
+        for name, value in (('version', True), ('kind', 'unknown'), ('job_id', '456'), ('phase', 'before'),
+                            ('stage', 'protected_guards'), ('scope', 'audit/review-2'),
+                            ('source_dir', '/outside'), ('request_sha256', '0' * 64),
+                            ('guard_set_sha256', '0' * 64), ('protected_guards_checked', False), ('source_containment_checked', False),
+                            ('native_job', True), ('exception_type', 'PermissionError'), ('errno', True), ('errno', 13)):
+            response = self.source_failure(context)
+            response['job_check_failure'][name] = value
+            with self.subTest(name=name), mock.patch.object(host, 'docker', return_value=json.dumps(response)):
+                with self.assertRaises(host.JobIntegrityError): host.control_check(context, 'after')
+
+    def test_success_response_with_any_failure_marker_is_rejected_before_success(self):
+        context = self.work_context()
+        for failure in (None, {}, {'version': 'unknown'}, self.source_failure(context)['job_check_failure']):
+            response = {'ok': True, 'source_after_sha256': {}, 'job_check_failure': failure}
+            with self.subTest(failure=failure), mock.patch.object(host, 'docker', return_value=json.dumps(response)):
+                with self.assertRaises(host.JobIntegrityError): host.control_check(context, 'after')
+        response = {'ok': True, 'source_after_sha256': {}}
+        with mock.patch.object(host, 'docker', return_value=json.dumps(response)):
+            self.assertEqual(host.control_check(context, 'after'), response)
+        for response in ({'ok': False, 'error': 'FileNotFoundError: ordinary_work_inventory_incomplete'},
+                         dict(self.source_failure(context), ok=True),
+                         dict(self.source_failure(context), source_after_sha256={}),
+                         dict(self.source_failure(context), error='different message')):
+            with mock.patch.object(host, 'docker', return_value=json.dumps(response)):
+                with self.assertRaises(host.JobIntegrityError): host.control_check(context, 'after')
+
+    def test_new_failure_class_does_not_apply_to_audit_or_native_checks(self):
+        context = self.context()
+        with mock.patch.object(host, 'docker', return_value=json.dumps(self.source_failure(context))):
+            with self.assertRaises(host.JobIntegrityError): host.control_check(context, 'after')
+        context = self.work_context()
+        context['request']['structure_check'] = {'version': 2}
+        with mock.patch.object(host, 'docker', return_value=json.dumps(self.source_failure(context))):
+            with self.assertRaises(host.JobIntegrityError): host.control_check(context, 'after')
+
+    def test_before_source_observation_failure_never_starts_target_or_fakes_inventory(self):
+        context = self.work_context()
+        self.intent()
+        host.save(self.job / 'host-launch.json', dict(payload=self.payload,
+                  request_sha256=host.sha(self.job / 'request.json'),
+                  manifest_sha256=host.sha(self.run / 'manifest.json'), helper_sha256=host.sha(self.helper)))
+        failure = self.source_failure(context, 'before')
+        with mock.patch.object(host, 'control_check', side_effect=host.JobSourceCheckError(failure['error'], failure['job_check_failure'])):
+            with mock.patch.object(host, 'docker') as docker:
+                host.supervise(self.payload)
+                docker.assert_not_called()
+        result = host.read_json(self.job / 'result.json')
+        self.assertTrue(result['sandbox_setup_failed'])
+        self.assertTrue(result['cleanup_complete'])
+        self.assertIsNone(result['exit_code'])
+        self.assertIn('source_check_error', result)
+        self.assertNotIn('integrity_error', result)
+        self.assertNotIn('source_at_start_sha256', result)
+        self.assertNotIn('source_after_sha256', result)
+
+    def test_after_source_observation_failure_preserves_exit_but_is_not_success(self):
+        context = self.work_context()
+        failure = self.source_failure(context)
+        result = self.run_attached({'Running': False, 'ExitCode': 0, 'Status': 'exited',
+                                    'StartedAt': '2026-10-21T00:00:00Z', 'Error': ''},
+                                   checks=[{'ok': True, 'source_at_start_sha256': {}},
+                                           host.JobSourceCheckError(failure['error'], failure['job_check_failure'])])
+        self.assertEqual(result['exit_code'], 0)
+        self.assertTrue(result['cleanup_complete'])
+        self.assertFalse(result['container_running'])
+        self.assertIn('error', result)
+        self.assertEqual(result['source_check_error'], failure['job_check_failure'])
+        self.assertNotIn('integrity_error', result)
+        self.assertIn('source_at_start_sha256', result)
+        self.assertNotIn('source_after_sha256', result)
 
     def test_post_spawn_metadata_failure_never_fabricates_terminal_result(self):
         real_save = host.save

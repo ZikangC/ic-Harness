@@ -42,3 +42,11 @@ To reobserve an existing run use `--resume <run>` instead of `--run-id` and omit
 To permit a recommended experiment, omit `--diagnose-only` and add `--allow-experiments` with diagnosis inputs/event. This requires completed advice `small_experiment`, existing readiness campaign budgets, no conflicting jobs and a caller configured positive `experiment_min_available_memory_mib`. Missing resource admission settings deny dispatch. One admission reserves one dispatch; an interrupted experiment is inspected through the existing readiness/audit path rather than silently resubmitted. Optimization then uses existing comparisons, functional checks, independent engineering review and optional formal RTL review/repairs. Full candidate synthesis remains a separate scheduling decision.
 
 Without this controller, use the same skill with ordinary files and basic tools: inspect the evidence read-only, publish a report, and invoke bounded optimization only under a separate authorization/budget. The skill does not depend on this JSON index or runtime vocabulary.
+
+When a project opts into `region_roots/build_files`, diagnosis also binds the
+project filelist bytes and that policy. Engineering findings may identify a whole
+datapath/control/writeback responsibility rather than a single function. Explain
+which control, callers and state must remain in the experiment; do not infer an
+edit from a log label alone. Diagnosis still cannot modify or submit anything.
+The existing separately authorized optimization path can create a regional
+candidate; see `readiness-integration.md` and the skill's `references/regional.md`.

@@ -7,9 +7,9 @@ input_dir = "input"
 output_dir = "output"
 
 [remote]
-ssh_host = "czk@100.85.224.17"
-host_workspace_root = "/home/czk/workspace"
-container = "eda"
+ssh_host = "txjg7-2@192.168.0.13"
+host_workspace_root = "/home/txjg7-2/ic-project"
+container = "k3demo-eda"
 container_workspace_root = "/work"
 # Empty: use the local project directory name. No dependency on the old project.
 project_name = ""

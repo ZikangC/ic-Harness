@@ -9,10 +9,10 @@ import statistics
 import tempfile
 
 from core import (ReadinessError, digest, file_manifest, load_variant, load_workspace,
-                  read_json, save_json, sha, under, utc_now, variant_tree)
+                  read_json, save_json, sha, under, utc_now, variant_build, variant_tree)
 
 
-def receipt(workspace, job_id):
+def receipt(workspace, job_id, *, require_success=True):
     from experiments import _job_dir
     workspace = Path(workspace).resolve()
     ws = load_workspace(workspace)
@@ -35,8 +35,15 @@ def receipt(workspace, job_id):
         raise ReadinessError(f"Stale experiment: {job_id}")
     if req.get("baseline_identity") and req["baseline_identity"] != load_variant(workspace, req["baseline"])["identity"]:
         raise ReadinessError(f"Stale paired verification: {job_id}")
-    if result.get("status") != "completed" or result.get("exit_code") != 0 or not result.get("source_integrity_passed"):
+    from experiments import _verify_request_builds, _verify_job_builds
+    _verify_request_builds(workspace, req)
+    _verify_job_builds(req, job)
+    if require_success and (result.get("status") != "completed" or result.get("exit_code") != 0 or not result.get("source_integrity_passed")):
         raise ReadinessError(f"Experiment is not successful and intact: {job_id}")
+    if not require_success:
+        from experiments import TERMINAL
+        if result.get("status") not in TERMINAL or not result.get("source_integrity_passed"):
+            raise ReadinessError(f"Structural evidence needs an intact terminal receipt: {job_id}")
     artifacts = result.get("artifact_hashes", {})
     if "tool.log" not in artifacts:
         raise ReadinessError(f"Missing artifact receipt: {job_id}")
@@ -50,7 +57,8 @@ def receipt(workspace, job_id):
         raise ReadinessError(f"Experiment work tree changed: {job_id}")
     if req.get("baseline_identity") and file_manifest(job / "work/baseline_tree") != req["baseline_files"]:
         raise ReadinessError(f"Experiment baseline tree changed: {job_id}")
-    if req["include_dirs"] and req["config"]["kind"] in ("yosys", "equiv"):
+    if ((req["include_dirs"] or (req.get("baseline_build") or {}).get("include_dirs"))
+            and req["config"]["kind"] in ("yosys", "equiv")):
         from experiments import _verify_include_aliases
         aliases = read_json(job / "include-aliases.json")
         if aliases.get("request_identity") != req["request_identity"]:
@@ -59,7 +67,38 @@ def receipt(workspace, job_id):
     return req, result
 
 
-def compare(workspace, variant, baseline_jobs, candidate_jobs, verification_jobs=(), *, metric="elapsed_seconds", min_ratio=1.2, min_repeats=3):
+STRUCTURE_LIMIT = "Structural evidence covers only its recorded checks and scope; whole-design synthesis readiness and acceptance remain unestablished."
+
+
+def _health_reference(workspace, health):
+    if health is None:
+        return None
+    logical_workspace = Path(workspace).absolute()
+    workspace, path = logical_workspace.resolve(), Path(health).absolute()
+    relative = next((path.relative_to(root) for root in (logical_workspace, workspace)
+                     if path.is_relative_to(root)), None)
+    if relative is None or not relative.parts:
+        raise ReadinessError("Structural report must stay inside this workspace")
+    path = under(workspace, relative)
+    return {"path": str(path), "sha256": sha(path)}
+
+
+def _structural_health(workspace, variant, health):
+    reference = _health_reference(workspace, health)
+    if reference:
+        from health import verify_report
+        report = read_json(reference["path"])
+        verify_report(workspace, variant, report)
+        if sha(reference["path"]) != reference["sha256"]:
+            raise ReadinessError("Structural report changed during validation")
+        return reference, report
+    return None, {"summary": {"baseline_state": "unknown", "candidate_state": "unknown",
+                               "candidate_new_count": 0, "unresolved_count": None,
+                               "whole_design_readiness": "not_established"},
+                  "limits": ["No structural report supplied; absence of evidence does not establish clean RTL."]}
+
+
+def compare(workspace, variant, baseline_jobs, candidate_jobs, verification_jobs=(), *, metric="elapsed_seconds", min_ratio=1.2, min_repeats=3, health=None):
     ws = load_workspace(workspace)
     candidate = load_variant(workspace, variant)
     if variant == "baseline" or not baseline_jobs or not candidate_jobs:
@@ -132,6 +171,9 @@ def compare(workspace, variant, baseline_jobs, candidate_jobs, verification_jobs
         decision, reason = "evidence_incomplete", "insufficient_repeated_measurements"
     else:
         decision, reason = "candidate_for_integration", "local_benefit_with_scoped_functional_evidence"
+    health_reference, structural = _structural_health(workspace, variant, health)
+    if structural["summary"]["candidate_new_count"] and decision == "candidate_for_integration":
+        decision, reason = "evidence_incomplete", "candidate_introduced_structural_issues"
     result = {"api_version": 2, "created_utc": utc_now(), "workspace_id": ws["workspace_id"],
               "baseline_identity": ws["baseline_identity"], "variant": variant, "variant_identity": candidate["identity"],
               "decision": decision, "reason": reason, "metric": metric, "baseline_jobs": list(baseline_jobs),
@@ -139,9 +181,14 @@ def compare(workspace, variant, baseline_jobs, candidate_jobs, verification_jobs
               "valid_verification": verifications, "invalid_verification": failures,
               "baseline_values": b, "candidate_values": c, "median_ratio": ratio,
               "min_ratio": min_ratio, "min_repeats": min_repeats, "ranges_separated": separated,
+              "health_report": health_reference, "structural_health": structural,
               "limits": ["Only the measured top, inputs, tool, configuration and stage were exercised.",
                          "Local benefit is not proof of full-design speed, mapped area, STA or physical acceptance.",
-                         "Inspect resource statistics and timing consequences before integrating a sharing change."]}
+                         "Inspect resource statistics and timing consequences before integrating a sharing change.",
+                         STRUCTURE_LIMIT]}
+    if ws["api_version"] == 3:
+        result.update(api_version=3, build=variant_build(ws, candidate),
+                      baseline_build=variant_build(ws, load_variant(workspace, "baseline")))
     if any(v["kind"] == "command" for v in verifications):
         result["limits"].append("Command verification covers its actual program/stimuli; inspect its adequacy before integration.")
     if any(v["kind"] == "equiv" for v in verifications):
@@ -155,23 +202,63 @@ def _revalidate(workspace, comparison):
     if digest(unsigned) != comparison.get("identity"):
         raise ReadinessError("Comparison report changed")
     # Re-evaluate the receipts rather than accepting a caller's decision field.
+    health_reference = comparison.get("health_report")
+    if health_reference and sha(health_reference["path"]) != health_reference["sha256"]:
+        raise ReadinessError("Structural report changed after comparison")
     fresh = compare(workspace, comparison["variant"], comparison["baseline_jobs"], comparison["candidate_jobs"],
-                    comparison["verification_jobs"], metric=comparison["metric"], min_ratio=comparison["min_ratio"], min_repeats=comparison["min_repeats"])
+                    comparison["verification_jobs"], metric=comparison["metric"], min_ratio=comparison["min_ratio"], min_repeats=comparison["min_repeats"],
+                    health=health_reference["path"] if health_reference else None)
+    if "structural_health" not in comparison:
+        # Historical bundles retain their original bytes and decisions. A fresh
+        # consumer still receives unknown structural status from verify().
+        fresh.pop("structural_health", None)
+        fresh.pop("health_report", None)
+        if STRUCTURE_LIMIT in fresh.get("limits", []):
+            fresh["limits"].remove(STRUCTURE_LIMIT)
     stable = lambda value: {k: v for k, v in value.items() if k not in ("identity", "created_utc")}
     if stable(fresh) != stable(comparison):
         raise ReadinessError("Comparison is stale")
     return comparison
 
 
+def _git_patch_path(path):
+    # Git quotes path bytes with C escapes, including octal UTF-8 bytes. JSON's
+    # Unicode/control escapes are not Git path syntax.
+    return '"' + "".join('\\"' if byte == 34 else '\\\\' if byte == 92
+                         else f"\\{byte:03o}" if byte < 32 or byte >= 127 else chr(byte)
+                         for byte in path.encode("utf-8")) + '"'
+
+
 def _patch(workspace, candidate):
     baseline, changed = variant_tree(workspace, "baseline"), variant_tree(workspace, candidate["name"])
     patch = []
     for rel in candidate["changes"]:
-        a = under(baseline, rel).read_text(encoding="utf-8").splitlines(keepends=True)
-        b = under(changed, rel).read_text(encoding="utf-8").splitlines(keepends=True)
-        for line in difflib.unified_diff(a, b, fromfile="a/" + rel, tofile="b/" + rel):
+        old, new = under(baseline, rel), under(changed, rel)
+        a = old.read_text(encoding="utf-8").splitlines(keepends=True) if old.is_file() else []
+        b = new.read_text(encoding="utf-8").splitlines(keepends=True) if new.is_file() else []
+        if old.is_file() != new.is_file() and not a and not b:
+            # An empty file has no unified-diff hunk; preserve its existence
+            # change explicitly. The blank line ends these extended headers
+            # before the next historical plain unified diff, if any.
+            patch.append(f"diff --git {_git_patch_path('a/' + rel)} {_git_patch_path('b/' + rel)}\n")
+            patch.append(("new" if new.is_file() else "deleted") + " file mode 100644\n\n")
+            continue
+        for line in difflib.unified_diff(a, b, fromfile="a/" + rel if old.is_file() else "/dev/null",
+                                        tofile="b/" + rel if new.is_file() else "/dev/null"):
             patch.append(line if line.endswith("\n") else line + "\n\\ No newline at end of file\n")
     return "".join(patch)
+
+
+def _regional_delivery(ws, candidate):
+    if ws["api_version"] != 3:
+        return {}
+    binding = {"build": variant_build(ws, candidate),
+               "baseline_build": {key: ws[key] for key in ("top", "sources", "include_dirs")},
+               "files": candidate["files"], "baseline_files": ws["files"],
+               "operations": candidate["operations"],
+               "region_roots": ws["region_roots"], "build_files": ws["build_files"],
+               "frozen_assets": ws["frozen_assets"]}
+    return {"api_version": 3, **binding, "manifest_identity": digest(binding)}
 
 
 def export(workspace, comparison, destination):
@@ -182,6 +269,7 @@ def export(workspace, comparison, destination):
             or out.relative_to(workspace).parts[0] in ("variants", "jobs", "workspace.json")):
         raise ReadinessError("Export must use a new directory inside this experiment workspace")
     candidate = load_variant(workspace, comparison["variant"])
+    ws = load_workspace(workspace)
     changed = variant_tree(workspace, comparison["variant"])
     out.mkdir(parents=True)
     (out / "candidate.patch").write_text(_patch(workspace, candidate), encoding="utf-8")
@@ -192,7 +280,10 @@ def export(workspace, comparison, destination):
               "decision": comparison["decision"], "patch_sha256": sha(out / "candidate.patch"),
               "candidate_tree": str(changed), "evidence_root": str(workspace / "jobs"),
               "status": "scoped_candidate" if comparison["decision"] == "candidate_for_integration" else "proposal_only_keep_original",
-              "note": "No source was applied. Integrate only after assessing verification scope and full-design consequences."})
+              "note": "No source was applied. Integrate only after assessing verification scope and full-design consequences.",
+              **_regional_delivery(ws, candidate),
+              **({"structural_health": comparison["structural_health"], "health_report": comparison.get("health_report")}
+                 if "structural_health" in comparison else {})})
     return read_json(out / "delivery.json")
 
 
@@ -221,7 +312,10 @@ def verify(workspace, comparison_path, delivery_path):
                 "decision": report["decision"], "patch_sha256": sha(delivery_path / "candidate.patch"),
                 "candidate_tree": str(variant_tree(workspace, report["variant"])),
                 "evidence_root": str(workspace / "jobs"),
-                "status": "scoped_candidate" if report["decision"] == "candidate_for_integration" else "proposal_only_keep_original"}
+                "status": "scoped_candidate" if report["decision"] == "candidate_for_integration" else "proposal_only_keep_original",
+                **_regional_delivery(ws, candidate),
+                **({"structural_health": report["structural_health"], "health_report": report.get("health_report")}
+                   if "structural_health" in report else {})}
     if any(delivery.get(k) != v for k, v in expected.items()):
         raise ReadinessError("Export delivery binding changed")
     return {"decision": report["decision"], "comparison_identity": report["identity"],
@@ -229,7 +323,10 @@ def verify(workspace, comparison_path, delivery_path):
             "baseline_identity": ws["baseline_identity"], "variant_identity": candidate["identity"],
             "baseline_files": ws["files"], "files": candidate["files"],
             "allowed_paths": ws["allowed_paths"], "changes": candidate["changes"],
-            "candidate_tree": expected["candidate_tree"], "delivery": str(delivery_path)}
+            "candidate_tree": expected["candidate_tree"], "delivery": str(delivery_path),
+            "structural_health": report.get("structural_health", _structural_health(workspace, report["variant"], None)[1]),
+            "health_report": report.get("health_report"),
+            **_regional_delivery(ws, candidate)}
 
 
 FINALIZATION_FILES = {"comparison.json", "candidate.json", "candidate.patch", "delivery.json", "finalization.json"}
@@ -263,6 +360,9 @@ def _finalization_record(workspace, destination, report, *, limits=True):
              "comparison_identity": report["identity"]}
     if limits and "limits" in report:
         value["limits"] = report["limits"]
+    if "structural_health" in report:
+        value["structural_health"] = report["structural_health"]["summary"]
+        value["health_report"] = report.get("health_report")
     value["identity"] = digest(value)
     return value
 
@@ -289,13 +389,14 @@ def verify_finalization(workspace, delivery):
 
 
 def finalize(workspace, variant, baseline_jobs, candidate_jobs, verification_jobs=(), *, destination,
-             metric="elapsed_seconds", min_ratio=1.2, min_repeats=3):
+             metric="elapsed_seconds", min_ratio=1.2, min_repeats=3, health=None):
     """Publish comparison/export/report together, or observe the same valid output."""
     workspace, destination = _finalization_destination(workspace, destination)
     load_workspace(workspace)
     invocation = {"variant": variant, "baseline_jobs": list(baseline_jobs), "candidate_jobs": list(candidate_jobs),
                   "verification_jobs": list(verification_jobs), "metric": metric,
                   "min_ratio": min_ratio, "min_repeats": min_repeats}
+    invocation["health_report"] = _health_reference(workspace, health)
     # Serialize publication in this workspace. No target directory is exposed
     # until every output and its actual evidence have passed fresh verification.
     with under(workspace, ".finalize.lock").open("a+") as lock:
@@ -307,7 +408,7 @@ def finalize(workspace, variant, baseline_jobs, candidate_jobs, verification_job
                 raise ReadinessError("Existing finalization belongs to a different invocation")
             return read_json(destination / "finalization.json")
         report = compare(workspace, variant, invocation["baseline_jobs"], invocation["candidate_jobs"],
-                         invocation["verification_jobs"], metric=metric, min_ratio=min_ratio, min_repeats=min_repeats)
+                         invocation["verification_jobs"], metric=metric, min_ratio=min_ratio, min_repeats=min_repeats, health=health)
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = Path(tempfile.mkdtemp(prefix=".finalize-", dir=destination.parent))
         try:

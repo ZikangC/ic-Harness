@@ -49,7 +49,7 @@ class HandoffTests(unittest.TestCase):
  call=remote_fixture.WorkerTests.call
  def initialize(self):
   task='Continue the synthetic native architecture revision with original requirements and independent evidence.\n'
-  settings={'tools':{'python':self.eda_python},'task_sha256':hashlib.sha256(task.encode('utf-8')).hexdigest()}
+  settings={'tools':{'python':self.eda_python,'yosys':os.environ.get('HARNESS_TEST_YOSYS','/opt/eda/bin/yosys')},'task_sha256':hashlib.sha256(task.encode('utf-8')).hexdigest()}
   isolation=remote_fixture.host_call(self,'describe')['job_isolation']if self.job_environment else{'backend':'docker_readonly_job_v1','uid':os.getuid(),'gid':os.getgid(),'metadata_fixture_only':True}
   init=self.call(action='init',resume=False,input_sha256={n:sha(self.root/'input'/n)for n in self.sources},harness_sha256=inventory(self.root/'harness'),settings=settings,models={'roles':{}},job_isolation=isolation)
   self.out=Path(init['run_dir']);self.cache=self.root/'cache';self.cache.mkdir(exist_ok=True)
@@ -173,6 +173,8 @@ class HandoffTests(unittest.TestCase):
   self.assertEqual(receipt['packet']['baseline_sha256'],current['baseline_sha256'])
   self.assertEqual(receipt['packet']['handoff_sha256'],current['handoff_sha256'])
   self.assertEqual(receipt['witness']['events_sha256'],hashlib.sha256(raw.encode()).hexdigest())
+  self.call(action='write',path='design.sv',base_sha256=None,content='module top(input wire a, output wire y); assign y=a; endmodule\n')
+  self.call(action='write',path='RTL_STRUCTURE.json',base_sha256=None,content=json.dumps({'version':1,'configurations':[{'id':'delivery','top':'top','sources':['design.sv']}],'blackboxes':[]}))
   fresh=self.call(action='rtl_review_begin')
   self.assertTrue(fresh['parent_readback']['complete'])
   self.assertTrue(fresh['parent_readback']['session_ended'])
@@ -194,7 +196,8 @@ class HandoffTests(unittest.TestCase):
   request=json.loads((self.out/'jobs'/rtl_job/'request.json').read_text())
   self.assertEqual(request['scope'],fresh['audit_scope']);self.assertEqual(request['candidate_sha256'],fresh['candidate_sha256'])
   report=self.out/fresh['audit_scope']/'readback-final-review.json'
-  self.dump(report,{'verdict':'pass','candidate_sha256':fresh['candidate_sha256'],'evidence':[rtl_job],
+  structure,structure_job=remote_fixture.structure_report(self,fresh)
+  self.dump(report,{'verdict':'pass','review_scope': fresh['review_scope'], 'candidate_sha256':fresh['candidate_sha256'],'evidence':[rtl_job,structure_job],'structure_checks':structure,
                     'reason':'Synthetic parent-readback and final release binding component only; no RTL functional or performance acceptance claim.'})
   final=self.call(action='rtl_review_decision',review=fresh['review'],report_path=str(report.relative_to(self.out)),expected_verdict='final')
   self.assertEqual(final['decision']['verdict'],'pass');self.assertTrue(final['parent_readback']['complete'])
@@ -341,17 +344,20 @@ class HandoffTests(unittest.TestCase):
   review=self.call(action='rtl_review_begin');scope=review['audit_scope']
   self.call(action='write',scope=scope,path='probe.py',base_sha256=None,content='assert 2+2==4\n')
   job=self.call(action='submit',scope=scope,argv=['python','probe.py'],timeout_seconds=10)['job_id'];self.wait(job)
-  report=self.out/scope/'report.json';data={'verdict':'pass','candidate_sha256':review['candidate_sha256'],'reason':'Synthetic functional evidence does not supply missing architecture approval.','evidence':[job]};self.dump(report,data)
+  report=self.out/scope/'report.json';data={'verdict':'pass','review_scope': review['review_scope'], 'candidate_sha256':review['candidate_sha256'],'reason':'Synthetic functional evidence does not supply missing architecture approval.','evidence':[job]};self.dump(report,data)
   with self.assertRaisesRegex(ValueError,'architecture revision lacks required approval'):self.call(action='rtl_review_decision',review=review['review'],report_path='report.json',expected_verdict='final')
   self.assertIsNone(self.call(action='rtl_review_status')['decision'])
   data['verdict']='insufficient_evidence';self.dump(report,data)
   self.assertEqual(self.call(action='rtl_review_decision',review=review['review'],report_path='report.json',expected_verdict='final')['decision']['verdict'],'insufficient_evidence')
 
  def test_initial_estimate_baseline_still_allows_independent_rtl_pass(self):
+  self.call(action='write',path='design.sv',base_sha256=None,content='module top(input wire a, output wire y); assign y=a; endmodule\n')
+  self.call(action='write',path='RTL_STRUCTURE.json',base_sha256=None,content=json.dumps({'version':1,'configurations':[{'id':'delivery','top':'top','sources':['design.sv']}],'blackboxes':[]}))
   review=self.call(action='rtl_review_begin');scope=review['audit_scope']
   self.call(action='write',scope=scope,path='probe.py',base_sha256=None,content='assert 2+2==4\n')
   job=self.call(action='submit',scope=scope,argv=['python','probe.py'],timeout_seconds=10)['job_id'];self.wait(job)
-  self.dump(self.out/scope/'report.json',{'verdict':'pass','candidate_sha256':review['candidate_sha256'],'reason':'Actual independent synthetic component evidence.','evidence':[job]})
+  structure,structure_job=remote_fixture.structure_report(self,review)
+  self.dump(self.out/scope/'report.json',{'verdict':'pass','review_scope': review['review_scope'], 'candidate_sha256':review['candidate_sha256'],'reason':'Actual independent synthetic component evidence.','evidence':[job,structure_job],'structure_checks':structure})
   self.assertEqual(self.call(action='rtl_review_decision',report_path='report.json',expected_verdict='final')['decision']['verdict'],'pass')
 
 if __name__=='__main__':unittest.main()

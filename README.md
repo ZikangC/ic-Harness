@@ -1,4 +1,34 @@
-# ic-Harness：v19 备份
+# ic-Harness：Harness_final
+
+本版本在 `codex/backup-v19-20261023` 的 v19 提交 `d0ead7f` 上继续更新，当前分支为 `Harness_final`。保留原有独立技能库、示例与备份，更新 `harness/`，并加入当前项目的映射完成报告。
+
+## 相对 v19 的主要变化
+
+- Readiness 支持显式区域策略下的跨文件候选：模块新增、修改、删除及有序源文件列表共同绑定，集成时使用发布日志和回滚保护。
+- 增加结构健康证据整理与交付，区分既有问题、新增问题和未知范围；局部检查不等同于整设计验收。
+- 增加原生 RTL 结构检查及候选放行门槛，绑定编译声明、源码、工具和实际作业证据；执行快速 lint 与 Yosys 结构检查。
+- 区分 `change` 与 `candidate` 审阅范围，局部修改审阅通过不授予完整 RTL 阶段放行。
+- 修复执行器由候选来源和流程节点选择，次数限制及审阅状态跨中断保留；增强作业源码检查失败的分类与恢复。
+- 补充回归测试、当前环境配置、`completion-report.md` 和 `harness/still_problem.md`。
+
+`harness/skills/` 是本次运行使用的冻结技能；独立的 `RTLskill/` 保留上一版本，两者不再保证字节一致。`backup/`、`examples/` 和下面的 v19 说明保留历史上下文，不代表当前版本的验收结论。`UPLOAD.md` 也是 v19 的历史上传说明。
+
+## 当前使用与限制
+
+需要 Python 3.11+；真实运行还需配置使用者自己的 OMP、认证、SSH、Docker 和服务器 EDA 工具。
+
+```bash
+python3 -B harness/run.py --help
+python3 -B harness/tools/check_environment.py --resolve-only
+```
+
+先阅读 `harness/config/README.md`、`harness/docs/rtl_flow.md` 及 `harness/docs/readiness-integration.md`。Readiness 默认不自动启用；区域策略需要明确配置，带 `RTL_STRUCTURE.json` 的原生区域端到端交付仍有非文件列表构建产物接口限制。审阅模型的工程证据解释仍需人工复核，详见 `harness/still_problem.md`。
+
+`completion-report.md` 记录已有独立映射结果及证据位置；本次代码提交不表示重新执行综合、功能验收或 STA。`output/`、缓存和大型 EDA 产物沿用 `.gitignore` 排除。
+
+---
+
+## v19 历史说明
 
 2026-10-23 整理，保存区域级结构重构之前的可用版本。controller 和五个配套 skill 来自已验证的 v19 隔离快照；其余独立 skill 来自当前 RTLskill 库。没有把较旧的生产 controller 或 canonical readiness 覆盖回 v19。
 

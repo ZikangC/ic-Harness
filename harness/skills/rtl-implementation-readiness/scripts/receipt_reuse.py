@@ -66,6 +66,12 @@ def referenced_receipt(workspace, job_id):
     for key in ('workspace_id', 'variant', 'variant_identity', 'baseline_identity', 'measurement_key'):
         if reference.get(key) != request.get(key):
             raise ReadinessError('Referenced receipt binding changed: ' + key)
+    if ws['api_version'] == 3:
+        for key in ('build', 'baseline_build'):
+            if reference.get(key) != request.get(key):
+                raise ReadinessError('Referenced receipt build binding changed: ' + key)
+        from experiments import _verify_request_builds
+        _verify_request_builds(workspace, request)
     if (request['workspace_id'] != ws['workspace_id']
             or load_variant(workspace, 'baseline')['identity'] != ws['baseline_identity']
             or (request.get('baseline_identity') is not None and request['baseline_identity'] != ws['baseline_identity'])
@@ -90,6 +96,8 @@ def clone_workspace(source, destination, jobs, variants=()):
                      'source_job_id': job_id, 'source_sha256': pins,
                      **{key: request.get(key) for key in ('workspace_id', 'variant', 'variant_identity',
                                                         'baseline_identity', 'measurement_key')}}
+        if ws['api_version'] == 3:
+            reference.update({key: request[key] for key in ('build', 'baseline_build')})
         reference['identity'] = digest(reference)
         references[job_id] = reference
     for name in selected:

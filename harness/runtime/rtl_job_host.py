@@ -224,6 +224,7 @@ def load_context(payload):
     if type(timeout) is not int or timeout <= 0:
         raise ValueError('invalid command timeout')
     return {'payload': payload, 'run': run, 'job': job, 'manifest': manifest,
+            'request_sha256': sha(job / 'request.json'),
             'request': request, 'spec': spec, 'host_source': host_source}
 
 
@@ -297,6 +298,46 @@ class JobIntegrityError(ValueError):
     pass
 
 
+class JobSourceCheckError(RuntimeError):
+    def __init__(self, message, failure):
+        RuntimeError.__init__(self, message)
+        self.failure = failure
+
+
+def ordinary_work_inventory_failure(context, phase, response):
+    """Accept only the frozen worker's narrow, bound incomplete-read report.
+
+    Unknown classifications preserve the existing fail-closed integrity path.
+    This exception never supplies a successful before/after source inventory.
+    """
+    if 'job_check_failure' not in response:
+        return None
+    failure = response['job_check_failure']
+    request = context['request']
+    fields = {'version', 'kind', 'job_id', 'phase', 'stage', 'scope', 'source_dir',
+              'request_sha256', 'guard_set_sha256', 'protected_guards_checked', 'source_containment_checked',
+              'native_job', 'exception_type', 'message', 'errno', 'filename'}
+    if (set(response) != {'ok', 'error', 'job_check_failure'} or
+            not isinstance(failure, dict) or set(failure) != fields or
+            type(failure.get('version')) is not int or failure['version'] != 2 or
+            failure.get('kind') != 'ordinary_work_inventory_incomplete' or
+            request.get('scope') != 'work' or request.get('structure_check') is not None or
+            failure.get('job_id') != context['payload']['job_id'] or failure.get('phase') != phase or
+            failure.get('stage') not in ('writable_scope_links', 'source_inventory') or
+            failure.get('scope') != 'work' or failure.get('source_dir') != request['source_dir'] or
+            failure.get('request_sha256') != context['request_sha256'] or
+            failure.get('guard_set_sha256') != digest(request.get('integrity_guards', [])) or
+            failure.get('protected_guards_checked') is not True or failure.get('source_containment_checked') is not True or
+            failure.get('native_job') is not False or
+            failure.get('exception_type') != 'FileNotFoundError' or
+            not isinstance(failure.get('message'), str) or
+            (failure.get('errno') is not None and (type(failure['errno']) is not int or failure['errno'] != 2)) or
+            (failure.get('filename') is not None and not isinstance(failure['filename'], str)) or
+            response.get('ok') is not False or response.get('error') != 'FileNotFoundError: ' + failure['message']):
+        raise JobIntegrityError('incomplete or mismatched ordinary-work inventory failure record')
+    return failure
+
+
 def control_check(context, phase):
     payload = context['payload']
     body = json.dumps({'action': 'job_check', 'job_id': payload['job_id'], 'phase': phase}).encode()
@@ -308,6 +349,9 @@ def control_check(context, phase):
         response = json.loads(raw)
     except (ValueError, TypeError):
         raise RuntimeError('control job check returned no valid JSON response')
+    failure = ordinary_work_inventory_failure(context, phase, response)
+    if failure is not None:
+        raise JobSourceCheckError(response['error'], failure)
     if response.get('error') or response.get('ok') is not True:
         raise JobIntegrityError('job integrity check failed: ' + str(response.get('error', response)))
     return response
@@ -459,6 +503,8 @@ def supervise(payload):
             result['sandbox_setup_failed'] = True
         if isinstance(error, JobIntegrityError):
             result['integrity_error'] = str(error)
+        if isinstance(error, JobSourceCheckError):
+            result['source_check_error'] = error.failure
     finally:
         if cid:
             try:

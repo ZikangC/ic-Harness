@@ -33,13 +33,33 @@ Write candidate files under an overlay with the same relative paths, then seal i
 python3 -B "$S/scripts/readiness.py" variant "$W" grouped --overlay "$W/overlays/grouped"
 ```
 
-An overlay cannot add/remove files, edit verification assets or replace the baseline. To change the input closure, start a new scoped workspace. Never edit `variants/*/tree` after sealing.
+The default fixed-file overlay cannot add/remove files, edit verification assets or replace the baseline. For module/caller/filelist changes, initialize an opt-in regional workspace and follow [regional candidates](regional.md); old fixed-file workspaces are not upgraded in place. Never edit `variants/*/tree` after sealing.
 
 ### Derived probes and integration paths
 
 A probe can establish a local cost result while its wrapper remains unsuitable for integration into original RTL. When the intended edit is in an original file, keep that file as the editable source and freeze the probe extractor/template and verification program as assets. A `command` measurement may derive the executable probe from the selected version's `{tree}` at runtime, writing generated files under `{job}` outside the copied input trees. Derive baseline and candidate independently using the same frozen extractor, widths, control and multiplicity; retain the emitted input and source hashes. This uses the existing command interface rather than editing a frozen wrapper to stand in for a different original file.
 
 Declare subsidiary tools such as the synthesis executable in `input_files`, capture their versions in the log, and include generation overhead consistently in both measurements. For functional checks, derive both versions from `{baseline_tree}` and `{tree}` and verify the changed source contract. A proof on only one fixed probe setting cannot establish every original call mode. Report that distinction and check all affected modes or the full helper contract as appropriate. A changed probe-only file may be delivered as probe evidence, but it is not an original RTL patch; positive local comparison does not override this path or coverage boundary.
+
+## Structural evidence before and after optimization
+
+Before spending the cost-experiment budget, inspect existing baseline structure checks and their applicability. After candidate changes, collect a comparable candidate check where affordable. Reuse a completed source-bound result; a new full-design synthesis is not required for each local variation. If evidence is missing, use the existing bounded `run` interface for a suitable check and preserve its actual scope and outcome.
+
+After obtaining diagnostics, follow the [investigation workflow](../SKILL.md#investigate-important-findings). Read the relevant raw evidence and source/configuration, explain important findings or retain a specific unresolved hypothesis, and use existing `run` jobs for any authorized discriminating probe. This reasoning belongs in the ordinary findings report; `health` is not a root-cause inference engine and requires no new command or report state for this step.
+
+The read-only `health` command collects existing receipts or external descriptors; it starts no EDA and does not alter jobs. Use a new report path inside `W`:
+
+```bash
+python3 -B "$S/scripts/readiness.py" health "$W" --variant baseline \
+  --baseline-job baseline-check --out "$W/health-before.json"
+python3 -B "$S/scripts/readiness.py" health "$W" --variant grouped \
+  --baseline-job baseline-check --candidate-job grouped-check \
+  --out "$W/health-pair.json"
+```
+
+`--baseline-job`, `--candidate-job`, `--baseline-evidence` and `--candidate-evidence` are repeatable. `--variant` is `baseline` or an actual sealed candidate name, not a fixed word `candidate`. Historical checks outside the workspace use an explicit source/build/tool/artifact descriptor; read [structural health](structural-health.md) for its schema and attribution limits. A failed receipt can still establish observed CHECK problems without becoming a successful cost measurement. Elaboration alone, an incomplete check or a custom-command exit zero cannot establish structural cleanliness.
+
+Pass `--health "$W/health-pair.json"` to `compare` or `finalize` to bind a freshly verified report to the proposal. Omission leaves health unknown and full-design readiness unestablished; it does not fabricate a pass. Confirmed candidate-new structural problems downgrade an otherwise positive comparison to `evidence_incomplete`. Baseline-existing or unclassified issues remain explicit limitations of any scoped proposal. No local health result establishes whole-design readiness, mapped area, STA or acceptance.
 
 ## Measurements and jobs
 
@@ -53,9 +73,9 @@ Save each configuration JSON in `W`. A built-in measurement:
 
 All ordered sources are handed to the frontend before hierarchy pruning. Selecting a smaller `--top` while retaining the full source list may still parse or process expensive unused modules. Reduce the source/dependency closure as well, or create an explicit source-bound probe that preserves the suspected mechanism. Record the scope and its limitations rather than treating the smaller top alone as evidence of a smaller run.
 
-Before starting a pilot, reserve campaign jobs/time for paired functional verification, three baseline and three candidate observations, compare/export and required review/delivery. Include scheduler submission reservations and output/cleanup overhead. Allocate only a small fraction of the remaining exploratory time to the initial baseline pilot rather than requesting the maximum per-job timeout. This tests whether the proposed scope is affordable before candidate construction. A successful pilot is a reusable observation only if its exact measurement identity matches the final comparison.
+Before new tool work for a campaign comparing or delivering an optimization candidate, choose and justify the measurement/repetition strategy (three observations per version by default). Reserve remaining jobs/time for still-needed measurements, paired functional verification, compare/export and required review/delivery, including scheduler/output/cleanup overhead. Reuse freshly verified completed measurements or pilots with matching source/scope/configuration/tool identities instead of reserving duplicate work. If affordability is unestablished, allocate only a small fraction of exploratory time to a short baseline pilot; the per-job timeout is a ceiling. Budget baseline-only diagnostic checks for their own checks and reporting.
 
-After a pilot timeout, inspect its actual inner result/log and the remaining campaign budget. If a representative retry and all reserved completion steps still fit, make one narrower attempt by reducing independent multiplicity and/or the necessary source/dependency closure. Retain the actual operation widths, modes, clock/reset/control and output observability, and explain why the suspected mechanism remains present. Confirm an affordable baseline pilot before sealing optimization variants or beginning candidate search. If narrowing removes the mechanism, the bounded retry is still unaffordable, or verification/delivery no longer fits, preserve the evidence and report the limitation honestly. A first timeout does not alone justify stopping with a useful retry still affordable.
+After a pilot timeout, inspect its actual inner result/log and the remaining campaign budget. If a representative retry and the selected completion steps still fit, make one narrower attempt by reducing independent multiplicity and/or the necessary source/dependency closure. Retain the actual operation widths, modes, clock/reset/control and output observability, and explain why the suspected mechanism remains present. Establish baseline affordability from applicable completed measurements or a pilot before sealing optimization variants or beginning candidate search. If narrowing removes the mechanism, the bounded retry is still unaffordable, or verification/delivery no longer fits, preserve the evidence and report the limitation honestly. A first timeout does not alone justify stopping with a useful retry still affordable.
 
 ```bash
 python3 -B "$S/scripts/readiness.py" run "$W" --variant baseline --config "$W/proc.json" --job-id base-1
@@ -96,7 +116,7 @@ For standalone `compare` and `finalize`, CLI `--out` is resolved from the proces
 
 ### Finite grouped experiments
 
-After an affordable pilot, put a finite sequence of measurements/checks in one plan rather than making a model round trip per inner job. The plan is a regular non-symlink JSON file inside `W`; each job has an inline existing configuration and a distinct persistent ID. For example, one short group can explicitly reuse a matching pilot and run another pair:
+Once baseline affordability is established, put a finite sequence of still-needed measurements/checks in one plan rather than making a model round trip per inner job. The plan is a regular non-symlink JSON file inside `W`; each job has an inline existing configuration and a distinct persistent ID. For example, one short group can explicitly reuse a matching pilot and run another pair:
 
 ```json
 {"jobs":[
@@ -123,7 +143,7 @@ Plan finalization before starting the last group by adding this optional object.
 "finalize":{"variant":"grouped","baseline_jobs":["pilot","base-2","base-3"],"candidate_jobs":["group-1","group-2","group-3"],"verification_jobs":["equiv-grouped"],"out":"final"}
 ```
 
-Optional `metric`, `min_ratio` and `min_repeats` match `finalize`. `out` is relative to `W`, outside jobs/variants/batches and reserved metadata. Finalization runs only when every planned job reached terminal and all referenced measurement receipts validate. A failed final paired verification can yield an ordinary `keep_baseline`; insufficient repeats or missing verification can yield `evidence_incomplete`. Unexecuted/failed measurements do not acquire a fabricated bundle. The batch result's `finalization` is either null or the exact freshly verified ordinary `verify-finalization` result. `verify-batch` revalidates this binding, current plan bytes, sources, tool inputs, results and raw artifacts without EDA or writes. Split groups may share prior successful IDs; each new group gets a new batch ID and explicit budget.
+Optional `metric`, `min_ratio` and `min_repeats` match `finalize`. Optional `finalize.health`, for example `"health":"reports/health.json"`, is a workspace-relative path to an existing health report; batch finalization and `verify-batch` freshly verify it. `out` is relative to `W`, outside jobs/variants/batches and reserved metadata. Finalization runs only when every planned job reached terminal and all referenced measurement receipts validate. A failed final paired verification can yield an ordinary `keep_baseline`; insufficient repeats or missing verification can yield `evidence_incomplete`. Unexecuted/failed measurements do not acquire a fabricated bundle. The batch result's `finalization` is either null or the exact freshly verified ordinary `verify-finalization` result. `verify-batch` revalidates this binding, current plan bytes, sources, tool inputs, results and raw artifacts without EDA or writes. Split groups may share prior successful IDs; each new group gets a new batch ID and explicit budget.
 
 Yosys include options use recorded, space-free relative aliases outside the source trees; their targets are checked against the copied inputs. Replay `experiment.ys` from the exact `execution.json` working directory, including when the original project or include directory contains spaces.
 
@@ -145,7 +165,7 @@ Runs the actual `proc`, `memory`, `flatten`, `check`, `equiv_make`, `equiv_simpl
 
 ## Compare and export
 
-Run independent repeats under comparable machine load, preferably interleave baseline/variant. Choose a minimum ratio larger than the observed noise and report both samples. Default requires three per version; an explicitly smaller `--min-repeats` must be justified in the report.
+Run independent repeats under comparable machine load, preferably interleave baseline/variant. Choose a minimum ratio larger than the observed noise and report all samples. Three per version is the default; choose a smaller `--min-repeats` with a justified strategy before budgeting. With few samples, state the limits on noise estimation and evidence strength, and keep claims within the measured scope. A single local result cannot establish full-design acceptance; paired functional verification remains required.
 
 Prefer one finalization command once those job IDs are available:
 
